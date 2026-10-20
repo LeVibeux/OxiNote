@@ -2,6 +2,7 @@
 //! state changes go through [`AppState`] (via [`Action`]s collected while
 //! drawing, applied at the end of the frame).
 
+mod edit;
 mod editor;
 mod graph;
 mod modals;
@@ -12,6 +13,7 @@ pub mod theme;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -85,7 +87,9 @@ pub struct UiCaches {
     images: HashMap<NotePath, Option<egui::load::Bytes>>,
     highlight: HashMap<TabId, (u64, LayoutJob)>,
     reading: HashMap<NotePath, editor::Rendered>,
-    completion: Option<editor::Completion>,
+    decor: HashMap<TabId, (u64, Rc<crate::editor::live::Decor>)>,
+    completion: Option<edit::CompletionUi>,
+    find: Option<edit::FindUi>,
     tree: panes::FolderNode,
     tree_key: Option<(usize, usize, u64)>,
 }
@@ -576,6 +580,9 @@ fn central(
             {
                 editor::conflict_banner(ui, &path, actions);
             }
+            if mode == ViewMode::Source && path.is_markdown() {
+                edit::find_bar(ui, state, caches, tab_id, &path, actions);
+            }
             egui::ScrollArea::vertical()
                 .id_salt(("note-scroll", tab_id, mode == ViewMode::Reading))
                 .auto_shrink([false, false])
@@ -585,7 +592,7 @@ fn central(
                     } else if mode == ViewMode::Reading {
                         editor::reading_view(ui, state, caches, &path, actions);
                     } else {
-                        editor::source_view(ui, state, caches, tab_id, &path, actions);
+                        edit::edit_view(ui, state, caches, tab_id, &path, actions);
                     }
                 });
         }
@@ -693,6 +700,9 @@ impl ObsiApp {
 
         for a in actions {
             apply(state, a);
+        }
+        if !state.editor.pending.is_empty() {
+            ctx.request_repaint();
         }
 
         // Scheduling.

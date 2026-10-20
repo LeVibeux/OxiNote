@@ -43,6 +43,24 @@ pub trait VaultBackend: VaultWrite {
     fn start_watching(&mut self) -> Result<()>;
     /// Drain pending external change events.
     fn poll_events(&mut self) -> Vec<VaultEvent>;
+    /// Write a binary file (pasted/dropped attachments), creating folders.
+    fn write_bytes(&self, path: &NotePath, bytes: &[u8]) -> Result<()>;
+    /// A free path for a new attachment named `file_name` pasted into
+    /// `note`, honouring `attachmentFolderPath`. Nothing is created.
+    fn attachment_path(&self, note: Option<&NotePath>, file_name: &str) -> Result<NotePath> {
+        let folder = self.app_config()?.attachment_folder(note);
+        let (stem, ext) = match file_name.rsplit_once('.') {
+            Some((s, e)) if !s.is_empty() => (s.to_string(), format!(".{e}")),
+            _ => (file_name.to_string(), String::new()),
+        };
+        let mut candidate = NotePath::join(&folder, file_name)?;
+        let mut n = 1;
+        while self.exists(&candidate) {
+            candidate = NotePath::join(&folder, &format!("{stem} {n}{ext}"))?;
+            n += 1;
+        }
+        Ok(candidate)
+    }
 }
 
 /// The on-disk vault from `ors-vault`, plus its watcher.
@@ -128,6 +146,12 @@ impl VaultBackend for DiskVault {
             Some((_, rx)) => rx.try_iter().collect(),
             None => Vec::new(),
         }
+    }
+    fn write_bytes(&self, path: &NotePath, bytes: &[u8]) -> Result<()> {
+        self.vault.write_bytes(path, bytes)
+    }
+    fn attachment_path(&self, note: Option<&NotePath>, file_name: &str) -> Result<NotePath> {
+        self.vault.available_attachment_path(note, file_name)
     }
 }
 
@@ -331,6 +355,10 @@ impl VaultBackend for MemVault {
             .map(|mut p| std::mem::take(&mut *p))
             .unwrap_or_default()
     }
+    fn write_bytes(&self, path: &NotePath, bytes: &[u8]) -> Result<()> {
+        self.add_binary(path, bytes.to_vec());
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -355,6 +383,33 @@ pub trait IndexBackend: LinkResolver {
     fn rename_file(&mut self, from: &NotePath, to: &NotePath);
     fn search(&self, query: &str) -> Result<Vec<SearchResult>>;
     fn fuzzy_find(&self, query: &str, limit: usize) -> Vec<(NotePath, Option<String>, i64)>;
+    /// [`IndexBackend::fuzzy_find`], optionally including attachments
+    /// (`![[` completion).
+    fn fuzzy_find_files(
+        &self,
+        query: &str,
+        limit: usize,
+        include_attachments: bool,
+    ) -> Vec<(NotePath, Option<String>, i64)> {
+        let _ = include_attachments;
+        self.fuzzy_find(query, limit)
+    }
+    /// Tags matching `prefix` for `#` completion, best first, with counts.
+    fn tag_suggestions(&self, prefix: &str, limit: usize) -> Vec<(String, usize)> {
+        let q = prefix.trim_start_matches('#').to_lowercase();
+        let mut v: Vec<(String, usize)> = self
+            .tags()
+            .into_iter()
+            .filter(|(t, _)| t.to_lowercase().contains(&q))
+            .collect();
+        v.sort_by(|a, b| {
+            let pa = !a.0.to_lowercase().starts_with(&q);
+            let pb = !b.0.to_lowercase().starts_with(&q);
+            pa.cmp(&pb).then(b.1.cmp(&a.1)).then(a.0.cmp(&b.0))
+        });
+        v.truncate(limit);
+        v
+    }
     /// Rename on disk and rewrite links; returns notes whose contents changed.
     fn rename_with_links(
         &mut self,
@@ -457,6 +512,24 @@ impl IndexBackend for RealIndex {
     }
     fn fuzzy_find(&self, query: &str, limit: usize) -> Vec<(NotePath, Option<String>, i64)> {
         ors_index::fuzzy_find(&self.cache, query, limit)
+    }
+    fn fuzzy_find_files(
+        &self,
+        query: &str,
+        limit: usize,
+        include_attachments: bool,
+    ) -> Vec<(NotePath, Option<String>, i64)> {
+        ors_index::fuzzy_find_with(
+            &self.cache,
+            query,
+            limit,
+            ors_index::FuzzyOptions {
+                include_attachments,
+            },
+        )
+    }
+    fn tag_suggestions(&self, prefix: &str, limit: usize) -> Vec<(String, usize)> {
+        self.cache.tag_suggestions(prefix, limit)
     }
     fn rename_with_links(
         &mut self,
