@@ -51,7 +51,8 @@ pub fn graph_view(
             tab.energy = layout.step(&tab.data, dt * 60.0);
             ui.ctx().request_repaint();
         }
-        if !tab.fitted && !tab.data.nodes.is_empty() && tab.energy <= ENERGY_EPSILON * 20.0 {
+        // Keep the graph framed while it settles, until the user moves the view.
+        if !tab.fitted && !tab.data.nodes.is_empty() {
             let (min, max) = layout.bounds();
             let w = (max.x - min.x).max(1.0);
             let h = (max.y - min.y).max(1.0);
@@ -62,7 +63,9 @@ pub fn graph_view(
                 -(min.x + max.x) / 2.0 * tab.zoom,
                 -(min.y + max.y) / 2.0 * tab.zoom,
             );
-            tab.fitted = true;
+            if tab.energy <= ENERGY_EPSILON {
+                tab.fitted = true;
+            }
         }
     }
     let Some(mut layout) = tab.layout.take() else {
@@ -89,10 +92,13 @@ pub fn graph_view(
             Some(i) => {
                 if let Some(p) = resp.interact_pointer_pos() {
                     layout.pin(i, Some(to_world(center, tab, p)));
+                    layout.reheat(0.3);
                     tab.energy = 1.0;
+                    tab.fitted = true;
                 }
             }
             None => {
+                tab.fitted = true;
                 let d = resp.drag_delta();
                 tab.pan.0 += d.x;
                 tab.pan.1 += d.y;
@@ -108,6 +114,7 @@ pub fn graph_view(
         let (scroll, zoom_delta) = ui.input(|i| (i.smooth_scroll_delta.y, i.zoom_delta()));
         let factor = (scroll * 0.0025).exp() * zoom_delta;
         if (factor - 1.0).abs() > 1e-4 {
+            tab.fitted = true;
             let new_zoom = (tab.zoom * factor).clamp(0.05, 8.0);
             if let Some(p) = pointer {
                 // Keep the point under the cursor fixed.
@@ -274,7 +281,6 @@ fn filters_panel(ui: &mut egui::Ui, tab: &mut GraphTab, rect: egui::Rect, pal: &
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.small_button("⟲").on_hover_text("Fit to view").clicked() {
                                 tab.fitted = false;
-                                tab.energy = 1.0;
                             }
                         });
                     });

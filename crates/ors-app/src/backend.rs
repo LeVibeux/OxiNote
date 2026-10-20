@@ -35,7 +35,8 @@ pub trait VaultBackend: VaultWrite {
     fn create_folder(&self, folder: &str) -> Result<()>;
     /// Create `"<name>.md"` in `folder`, deduplicating the name like Obsidian.
     fn create_note(&self, folder: &str, name: &str, contents: &str) -> Result<NotePath>;
-    fn rename_folder(&self, from: &str, to: &str) -> Result<()>;
+    /// Delete a folder and everything inside it.
+    fn delete_folder(&self, folder: &str) -> Result<()>;
     fn app_config(&self) -> Result<AppConfig>;
     fn open_daily_note(&self, date: Date) -> Result<NotePath>;
     /// Start the file watcher (no-op for in-memory vaults).
@@ -109,8 +110,8 @@ impl VaultBackend for DiskVault {
     fn create_note(&self, folder: &str, name: &str, contents: &str) -> Result<NotePath> {
         self.vault.create_note(folder, name, contents)
     }
-    fn rename_folder(&self, from: &str, to: &str) -> Result<()> {
-        self.vault.rename_folder(from, to)
+    fn delete_folder(&self, folder: &str) -> Result<()> {
+        self.vault.delete_folder(folder)
     }
     fn app_config(&self) -> Result<AppConfig> {
         self.vault.app_config()
@@ -295,23 +296,17 @@ impl VaultBackend for MemVault {
         self.text.write(&candidate, contents)?;
         Ok(candidate)
     }
-    fn rename_folder(&self, from: &str, to: &str) -> Result<()> {
-        let prefix = format!("{from}/");
+    fn delete_folder(&self, folder: &str) -> Result<()> {
+        let prefix = format!("{folder}/");
         for f in self.list_files()? {
-            if let Some(rest) = f.as_str().strip_prefix(&prefix) {
-                self.rename(&f, &NotePath::join(to, rest)?)?;
+            if f.as_str().starts_with(&prefix) {
+                self.delete(&f)?;
             }
         }
-        let mut folders = self.folders.write().map_err(|_| Self::lock_err())?;
-        let renamed: Vec<String> = folders
-            .iter()
-            .filter(|f| *f == from || f.starts_with(&prefix))
-            .cloned()
-            .collect();
-        for f in renamed {
-            folders.remove(&f);
-            folders.insert(format!("{to}{}", &f[from.len()..]));
-        }
+        self.folders
+            .write()
+            .map_err(|_| Self::lock_err())?
+            .retain(|f| f != folder && !f.starts_with(&prefix));
         Ok(())
     }
     fn app_config(&self) -> Result<AppConfig> {
@@ -367,6 +362,23 @@ pub trait IndexBackend: LinkResolver {
         from: &NotePath,
         to: &NotePath,
     ) -> Result<Vec<NotePath>>;
+    /// Move a folder and rewrite links; returns notes whose contents changed.
+    fn rename_folder_with_links(
+        &mut self,
+        vault: &dyn VaultWrite,
+        from: &str,
+        to: &str,
+    ) -> Result<Vec<NotePath>> {
+        let prefix = format!("{from}/");
+        let mut changed = Vec::new();
+        for f in self.files() {
+            if let Some(rest) = f.as_str().strip_prefix(&prefix) {
+                let target = NotePath::join(to, rest)?;
+                changed.extend(self.rename_with_links(vault, &f, &target)?);
+            }
+        }
+        Ok(changed)
+    }
     /// A layout engine for the graph view.
     fn new_layout(&self, graph: &GraphData) -> Box<dyn LayoutEngine>;
     /// Parse a markdown fragment (embeds, sections).
@@ -461,6 +473,34 @@ impl IndexBackend for RealIndex {
         }
         Ok(changed)
     }
+    fn rename_folder_with_links(
+        &mut self,
+        vault: &dyn VaultWrite,
+        from: &str,
+        to: &str,
+    ) -> Result<Vec<NotePath>> {
+        let prefix = format!("{from}/");
+        let moved: Vec<NotePath> = self
+            .cache
+            .files()
+            .into_iter()
+            .filter(|f| f.as_str().starts_with(&prefix))
+            .collect();
+        let changed = ors_index::rename_folder_with_links(vault, &mut self.cache, from, to)?;
+        for f in moved {
+            if let Some(rest) = f.as_str().strip_prefix(&prefix)
+                && let Ok(target) = NotePath::join(to, rest)
+            {
+                self.search.rename(&f, &target);
+            }
+        }
+        for p in &changed {
+            if let Ok(src) = vault.read_to_string(p) {
+                self.search.update(p, &src);
+            }
+        }
+        Ok(changed)
+    }
     fn new_layout(&self, graph: &GraphData) -> Box<dyn LayoutEngine> {
         Box::new(ForceEngine(ForceLayout::new(graph, ForceParams::default())))
     }
@@ -480,6 +520,8 @@ pub trait LayoutEngine {
     fn sync(&mut self, old: &GraphData, new: &GraphData);
     fn hit_test(&self, point: Vec2, radius: f32) -> Option<usize>;
     fn bounds(&self) -> (Vec2, Vec2);
+    /// Wake the simulation up (after a drag or a graph change).
+    fn reheat(&mut self, _alpha: f32) {}
 }
 
 /// [`ForceLayout`] from `ors-graph`.
@@ -504,6 +546,9 @@ impl LayoutEngine for ForceEngine {
     fn bounds(&self) -> (Vec2, Vec2) {
         self.0.bounds()
     }
+    fn reheat(&mut self, alpha: f32) {
+        self.0.reheat(alpha);
+    }
 }
 
 #[cfg(test)]
@@ -516,8 +561,8 @@ mod tests {
         assert_eq!(v.list_folders().unwrap(), vec!["a", "a/b"]);
         let p = v.create_note("", "d", "").unwrap();
         assert_eq!(p.as_str(), "d 1.md");
-        v.rename_folder("a", "z").unwrap();
-        assert!(v.exists(&NotePath::new("z/b/c.md").unwrap()));
+        v.delete_folder("a").unwrap();
+        assert!(!v.exists(&NotePath::new("a/b/c.md").unwrap()));
     }
 
     #[test]

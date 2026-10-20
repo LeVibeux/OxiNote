@@ -133,7 +133,10 @@ impl GraphTab {
             });
         }
         match &mut self.layout {
-            Some(layout) => layout.sync(&self.data, &g),
+            Some(layout) => {
+                layout.sync(&self.data, &g);
+                layout.reheat(0.3);
+            }
             None => self.layout = Some(index.new_layout(&g)),
         }
         self.data = g;
@@ -693,6 +696,12 @@ impl AppState {
 
     pub fn handle_vault_event(&mut self, ev: VaultEvent) {
         match ev {
+            // Atomic saves (ours or other editors') show up as delete +
+            // create: a "deleted" file that exists again is a modification.
+            VaultEvent::Deleted(p) if self.vault.exists(&p) => {
+                self.index.update_file(self.vault.as_read(), &p);
+                self.on_disk_change(&p);
+            }
             VaultEvent::Created(p) | VaultEvent::Modified(p) => {
                 self.index.update_file(self.vault.as_read(), &p);
                 self.on_disk_change(&p);
@@ -791,19 +800,8 @@ impl AppState {
     /// Folder for new notes according to `.obsidian/app.json`.
     pub fn new_note_folder(&self) -> String {
         let cfg = self.vault.app_config().unwrap_or_default();
-        match cfg.new_file_location.as_deref() {
-            Some("current") => self
-                .active_note()
-                .and_then(NotePath::parent)
-                .unwrap_or("")
-                .to_string(),
-            Some("folder") => cfg
-                .new_file_folder_path
-                .unwrap_or_default()
-                .trim_matches('/')
-                .to_string(),
-            _ => String::new(),
-        }
+        let current = self.active_note().map(|p| p.parent().unwrap_or(""));
+        cfg.new_note_folder(current)
     }
 
     /// Create a note named `name` in `folder` and open it.
@@ -969,11 +967,24 @@ impl AppState {
                 Some((f.clone(), NotePath::join(&to, rest).ok()?))
             })
             .collect();
-        match self.vault.rename_folder(from, &to) {
-            Ok(()) => {
+        match self
+            .index
+            .rename_folder_with_links(self.vault.as_write(), from, &to)
+        {
+            Ok(changed) => {
                 for (a, b) in &moved {
-                    self.index.rename_file(a, b);
                     self.retarget(a, b);
+                }
+                for p in changed {
+                    self.reload_clean_buffer(&p);
+                }
+                // Moving files leaves the (now empty) source folder behind.
+                let still_used = self
+                    .vault
+                    .list_files()
+                    .is_ok_and(|fs| fs.iter().any(|f| f.as_str().starts_with(&prefix)));
+                if !still_used {
+                    let _ = self.vault.delete_folder(from);
                 }
                 self.refresh_files();
                 self.bump();
@@ -994,14 +1005,18 @@ impl AppState {
                     .collect()
             }
         };
-        for p in files {
-            match self.vault.delete(&p) {
-                Ok(()) => {
+        let result = match target {
+            FsTarget::File(p) => self.vault.delete(p),
+            FsTarget::Folder(f) => self.vault.delete_folder(f),
+        };
+        match result {
+            Ok(()) => {
+                for p in files {
                     self.index.remove_file(&p);
                     self.close_tabs_of(&p);
                 }
-                Err(e) => self.error(format!("Cannot delete {p}: {e}")),
             }
+            Err(e) => self.error(format!("Cannot delete {}: {e}", target.display())),
         }
         self.refresh_files();
         self.bump();
@@ -1658,5 +1673,100 @@ mod tests {
         assert!(s.generation > g0);
         assert!(s.files.contains(&p("new.md")));
         assert_eq!(s.index.backlinks(&p("a.md")).len(), 1);
+    }
+
+    // ----- end-to-end with the real upstream crates on a disk copy --------
+
+    fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
+        std::fs::create_dir_all(to).unwrap();
+        for e in std::fs::read_dir(from).unwrap() {
+            let e = e.unwrap();
+            let target = to.join(e.file_name());
+            if e.file_type().unwrap().is_dir() {
+                copy_dir(&e.path(), &target);
+            } else {
+                std::fs::copy(e.path(), target).unwrap();
+            }
+        }
+    }
+
+    fn real_state(name: &str) -> (AppState, std::path::PathBuf) {
+        let src =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/sample-vault");
+        let dir = std::env::temp_dir().join(format!("ors-app-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        copy_dir(&src, &dir);
+        let v = crate::backend::DiskVault::open(&dir).unwrap();
+        let s = AppState::new(Box::new(v), crate::ui::real_index, Settings::default());
+        (s, dir)
+    }
+
+    #[test]
+    fn real_vault_rename_updates_links() {
+        let (mut s, dir) = real_state("rename");
+        assert!(s.files.contains(&p("Accueil.md")));
+        s.open(&p("Projets/Rust notes.md"), OpenIn::CurrentTab);
+        assert!(s.note_info().backlink_count > 0);
+        s.rename_file(&p("Projets/Rust notes.md"), "Rust");
+        assert_eq!(s.active_note(), Some(&p("Projets/Rust.md")));
+        let obsi = disk(&s, "Projets/ObsiRust.md");
+        assert!(obsi.contains("[[Rust]]"), "{obsi}");
+        assert!(!s.files.contains(&p("Projets/Rust notes.md")));
+        s.search_query = "propriétaire".into();
+        s.refresh_search();
+        let res = s.search_results.clone().unwrap();
+        assert_eq!(res[0].path, p("Projets/Rust.md"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn real_vault_folder_ops_and_notes() {
+        let (mut s, dir) = real_state("folders");
+        s.open(&p("Projets/ObsiRust.md"), OpenIn::CurrentTab);
+        s.rename_folder("Projets", "Projects");
+        assert_eq!(s.active_note(), Some(&p("Projects/ObsiRust.md")));
+        assert!(!s.folders.iter().any(|f| f == "Projets"));
+        let accueil = disk(&s, "Accueil.md");
+        assert!(accueil.contains("Projects/ObsiRust"), "{accueil}");
+        // New notes go to the configured folder (Inbox).
+        s.execute(Command::NewNote);
+        let created = s.active_note().cloned().unwrap();
+        assert_eq!(created.parent(), Some("Inbox"));
+        s.execute(Command::OpenDailyNote);
+        assert!(s.active_note().unwrap().as_str().starts_with("Journal/"));
+        s.delete(&FsTarget::Folder("Projects".into()));
+        assert!(!s.files.iter().any(|f| f.as_str().starts_with("Projects/")));
+        assert!(
+            s.toasts.iter().all(|t| t.kind != ToastKind::Error),
+            "{:?}",
+            s.toasts
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn real_vault_watcher_echo_and_external_reload() {
+        let (mut s, dir) = real_state("watch");
+        let a = p("Orpheline.md");
+        s.open(&a, OpenIn::CurrentTab);
+        s.buffers.get_mut(&a).unwrap().text = "mine".into();
+        s.buffer_edited(&a);
+        assert!(s.save(&a));
+        let poll = |s: &mut AppState, until: &dyn Fn(&AppState) -> bool| {
+            for _ in 0..40 {
+                s.poll_vault();
+                if until(s) {
+                    return true;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            false
+        };
+        poll(&mut s, &|_| false);
+        assert!(s.buffers[&a].conflict.is_none());
+        assert_eq!(s.buffers[&a].text, "mine");
+        std::fs::write(dir.join("Orpheline.md"), "external").unwrap();
+        assert!(poll(&mut s, &|s| s.buffers[&a].text == "external"));
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

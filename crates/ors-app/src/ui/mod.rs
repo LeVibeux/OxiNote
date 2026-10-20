@@ -143,7 +143,7 @@ pub struct ObsiApp {
     title: String,
 }
 
-fn real_index(vault: &dyn VaultRead) -> Box<dyn IndexBackend> {
+pub(crate) fn real_index(vault: &dyn VaultRead) -> Box<dyn IndexBackend> {
     match RealIndex::build(vault) {
         Ok(i) => Box::new(i),
         Err(e) => {
