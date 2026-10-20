@@ -5,6 +5,7 @@ mod cache_tests;
 mod fuzzy_tests;
 mod graph_tests;
 mod perf_tests;
+mod properties_tests;
 mod refactor_tests;
 mod resolve_tests;
 mod search_tests;

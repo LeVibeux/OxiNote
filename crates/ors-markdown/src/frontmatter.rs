@@ -271,9 +271,12 @@ pub(crate) fn extract(source: &str, lines: &LineIndex) -> Option<FrontmatterResu
             let e = find_in(bytes, p, block.yaml_end, b"\n").unwrap_or(block.yaml_end);
             Span::new(p, e)
         });
-        let mut cursor = key_pos.unwrap_or(block.yaml_start);
+        // Start after the key itself so `tags` cannot match a tag named `a`.
+        let mut cursor = key_pos.map_or(block.yaml_start, |p| {
+            find_in(bytes, p, key_line_span.end.max(p + 1), b":").map_or(p, |c| c + 1)
+        });
         for name in names {
-            let span = match find_in(bytes, cursor, block.yaml_end, name.as_bytes()) {
+            let span = match find_tag_token(source, cursor, block.yaml_end, &name) {
                 Some(p) => {
                     cursor = p + name.len();
                     Span::new(p, p + name.len())
@@ -360,6 +363,32 @@ pub(crate) fn extract(source: &str, lines: &LineIndex) -> Option<FrontmatterResu
 
     res.map = Some(map);
     Some(res)
+}
+
+/// First occurrence of `name` in `source[from..to]` as a whole tag token (not
+/// preceded or followed by a tag character).
+fn find_tag_token(source: &str, from: usize, to: usize, name: &str) -> Option<usize> {
+    let bytes = source.as_bytes();
+    let mut p = from;
+    while let Some(i) = find_in(bytes, p, to, name.as_bytes()) {
+        let end = i + name.len();
+        let before_ok = !source[..i]
+            .chars()
+            .next_back()
+            .is_some_and(crate::scan::is_tag_char);
+        let after_ok = !source[end..]
+            .chars()
+            .next()
+            .is_some_and(crate::scan::is_tag_char);
+        if before_ok && after_ok {
+            return Some(i);
+        }
+        p = i + 1;
+        while p < to && !source.is_char_boundary(p) {
+            p += 1;
+        }
+    }
+    None
 }
 
 /// Position of a top-level `key:` line in the YAML text.

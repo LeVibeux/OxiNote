@@ -11,6 +11,7 @@ mod export;
 mod graph_cmd;
 mod html;
 mod output;
+mod props_cmd;
 
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
@@ -97,6 +98,29 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// List every property used in the vault with its type and number of notes.
+    ///
+    /// Types come from `.obsidian/types.json`; inferred types are marked with `?`.
+    Props {
+        /// Path of the vault folder.
+        vault: PathBuf,
+        /// List the distinct values of this property instead (with counts).
+        #[arg(long, value_name = "KEY")]
+        values: Option<String>,
+        /// Print machine-readable JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Edit the properties (frontmatter) of a note.
+    Prop {
+        #[command(subcommand)]
+        action: PropAction,
+    },
+    /// Rename tags across the vault, or add / remove a tag on a note.
+    Tag {
+        #[command(subcommand)]
+        action: TagAction,
+    },
     /// List notes without any incoming or outgoing link.
     Orphans {
         /// Path of the vault folder.
@@ -176,6 +200,77 @@ enum Command {
         /// Write into a non-empty output folder, overwriting files.
         #[arg(long)]
         force: bool,
+    },
+}
+
+/// `prop` subcommands.
+#[derive(Debug, Subcommand)]
+enum PropAction {
+    /// Set a property of a note (creating the frontmatter if needed).
+    ///
+    /// The value is parsed according to the property's type: `--type`, else
+    /// the type assigned in `.obsidian/types.json`, else the type of the
+    /// note's current value, else inferred from the text (number, true/false,
+    /// date, datetime or text). List types (multitext, tags, aliases) take
+    /// comma-separated values. An empty value clears the property (`key:`).
+    Set {
+        /// Path of the vault folder.
+        vault: PathBuf,
+        /// Note path or name, resolved like a wikilink.
+        note: String,
+        /// Property name.
+        key: String,
+        /// Value, e.g. "done", "3", "true", "2026-10-20", "a, b".
+        #[arg(allow_hyphen_values = true)]
+        value: String,
+        /// Property type (text, multitext, number, checkbox, date, datetime,
+        /// aliases, tags); also recorded in `.obsidian/types.json`.
+        #[arg(long = "type", value_name = "TYPE")]
+        ty: Option<String>,
+    },
+    /// Remove a property from a note.
+    Rm {
+        /// Path of the vault folder.
+        vault: PathBuf,
+        /// Note path or name, resolved like a wikilink.
+        note: String,
+        /// Property name.
+        key: String,
+    },
+}
+
+/// `tag` subcommands.
+#[derive(Debug, Subcommand)]
+enum TagAction {
+    /// Rename a tag (and its nested children) in every note, inline and in frontmatter.
+    Rename {
+        /// Path of the vault folder.
+        vault: PathBuf,
+        /// Current tag, with or without `#`.
+        old: String,
+        /// New tag name (renaming into an existing tag merges them).
+        new: String,
+        /// Only show which notes would change.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Add a tag to a note's frontmatter `tags` list.
+    Add {
+        /// Path of the vault folder.
+        vault: PathBuf,
+        /// Note path or name, resolved like a wikilink.
+        note: String,
+        /// Tag, with or without `#`.
+        tag: String,
+    },
+    /// Remove a tag from a note (frontmatter list and inline `#tag` occurrences).
+    Rm {
+        /// Path of the vault folder.
+        vault: PathBuf,
+        /// Note path or name, resolved like a wikilink.
+        note: String,
+        /// Tag, with or without `#`.
+        tag: String,
     },
 }
 
@@ -304,6 +399,76 @@ fn run(cli: Cli, out: &mut dyn Write, color: bool) -> Result<()> {
             } else {
                 write!(out, "{}", commands::format_tags(&tags, by_count))?;
             }
+        }
+        Command::Props {
+            vault,
+            values,
+            json,
+        } => {
+            let ctx = context::Context::load(&vault)?;
+            if let Some(key) = values {
+                let vals = props_cmd::sorted_values(&ctx.cache.property_values(&key));
+                if json {
+                    output::write_json(out, &vals)?;
+                } else {
+                    write!(out, "{}", props_cmd::format_values(&vals))?;
+                    if vals.is_empty() {
+                        eprintln!("no values for property {key:?}");
+                    }
+                }
+            } else {
+                let types = ctx
+                    .vault
+                    .property_types()
+                    .map_err(|e| anyhow::anyhow!("cannot read types.json: {e}"))?;
+                let rows = props_cmd::prop_rows(&ctx.cache.properties(), &types);
+                if json {
+                    output::write_json(out, &rows)?;
+                } else {
+                    write!(out, "{}", props_cmd::format_props(&rows))?;
+                }
+            }
+        }
+        Command::Prop { action } => {
+            let report = match action {
+                PropAction::Set {
+                    vault,
+                    note,
+                    key,
+                    value,
+                    ty,
+                } => {
+                    let mut ctx = context::Context::load(&vault)?;
+                    props_cmd::prop_set(&mut ctx, &note, &key, &value, ty.as_deref())?
+                }
+                PropAction::Rm { vault, note, key } => {
+                    let mut ctx = context::Context::load(&vault)?;
+                    props_cmd::prop_rm(&mut ctx, &note, &key)?
+                }
+            };
+            write!(out, "{report}")?;
+        }
+        Command::Tag { action } => {
+            let report = match action {
+                TagAction::Rename {
+                    vault,
+                    old,
+                    new,
+                    dry_run,
+                } => {
+                    let mut ctx = context::Context::load(&vault)?;
+                    props_cmd::tag_rename(&mut ctx, &old, &new, dry_run)?
+                }
+                TagAction::Add { vault, note, tag } => {
+                    let mut ctx = context::Context::load(&vault)?;
+                    props_cmd::tag_add(&mut ctx, &note, &tag)?
+                }
+                TagAction::Rm { vault, note, tag } => {
+                    let mut ctx = context::Context::load(&vault)?;
+                    props_cmd::tag_rm(&mut ctx, &note, &tag)?
+                }
+            };
+            write!(out, "{report}")?;
         }
         Command::Orphans { vault, json } => {
             let ctx = context::Context::load(&vault)?;
