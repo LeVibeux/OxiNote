@@ -278,6 +278,30 @@ pub fn toggle_checkbox(text: &mut String, sel: Sel) -> Sel {
     toggle_checklist(text, sel)
 }
 
+/// Click on a rendered checkbox: toggle the status char of the task on
+/// 0-based `line` (`[ ]` becomes `[x]`, any other status becomes `[ ]`).
+/// Returns `text` unchanged when the line is not a task.
+pub fn toggle_task_at(text: &str, line: usize) -> String {
+    let mut start = 0;
+    for (n, l) in text.split('\n').enumerate() {
+        if n == line {
+            let content = l.trim_end_matches('\r');
+            if let Some(p) = parse_prefix(content)
+                && let Some(c) = p.task
+            {
+                let at = start + p.task_at;
+                let next = if c == ' ' { "x" } else { " " };
+                let mut out = text.to_string();
+                out.replace_range(at..at + c.len_utf8(), next);
+                return out;
+            }
+            break;
+        }
+        start += l.len() + 1;
+    }
+    text.to_string()
+}
+
 /// Toggle a bullet (`ordered = false`) or numbered list on touched lines.
 pub fn toggle_list(text: &mut String, sel: Sel, ordered: bool) -> Sel {
     let lines = touched_lines(text, sel);
@@ -591,6 +615,19 @@ mod tests {
         // Several lines at once.
         assert_eq!(run("|a\n- [ ] b|", f), "- [ ] |a\n- [x] b|");
         assert_eq!(run("|", f), "- [ ] |");
+    }
+
+    #[test]
+    fn task_toggle_at_line() {
+        let t = "# Idées\n- [ ] é\n  - [x] fait\r\n- [/] mi\nrien";
+        let a = toggle_task_at(t, 1);
+        assert_eq!(a, "# Idées\n- [x] é\n  - [x] fait\r\n- [/] mi\nrien");
+        assert_eq!(toggle_task_at(&a, 1), t);
+        assert!(toggle_task_at(t, 2).contains("  - [ ] fait"));
+        assert!(toggle_task_at(t, 3).contains("- [ ] mi"));
+        assert_eq!(toggle_task_at(t, 0), t);
+        assert_eq!(toggle_task_at(t, 4), t);
+        assert_eq!(toggle_task_at(t, 99), t);
     }
 
     #[test]

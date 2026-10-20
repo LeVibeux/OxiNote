@@ -29,6 +29,14 @@ pub enum RightPane {
     Outline,
 }
 
+/// How notes open for editing (Obsidian's "Default editing mode").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum EditingMode {
+    #[default]
+    LivePreview,
+    Source,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -42,6 +50,8 @@ pub struct Settings {
     pub readable_line_length: bool,
     /// Autosave delay after the last keystroke, in seconds.
     pub autosave_delay: f64,
+    /// Live Preview or Source mode when editing.
+    pub default_editing_mode: EditingMode,
 }
 
 impl Default for Settings {
@@ -56,6 +66,7 @@ impl Default for Settings {
             right_pane: RightPane::Backlinks,
             readable_line_length: true,
             autosave_delay: 1.0,
+            default_editing_mode: EditingMode::LivePreview,
         }
     }
 }

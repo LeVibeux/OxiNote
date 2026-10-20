@@ -93,6 +93,13 @@ impl EditorState {
     }
 }
 
+impl EditorState {
+    /// Live Preview for `tab` given the user setting.
+    pub fn live(&self, tab: TabId, mode: crate::settings::EditingMode) -> bool {
+        self.is_live(tab, mode == crate::settings::EditingMode::LivePreview)
+    }
+}
+
 /// Is `cmd` an editing command applied by the editor widget?
 pub fn is_editor_command(cmd: Command) -> bool {
     use Command::*;
@@ -121,6 +128,31 @@ pub fn is_editor_command(cmd: Command) -> bool {
     )
 }
 
+/// Apply a formatting command to the selection. `None` = not applicable
+/// (text unchanged) or not a text command.
+pub fn run_command(cmd: Command, text: &mut String, sel: Sel) -> Option<Sel> {
+    use Command::*;
+    Some(match cmd {
+        ToggleBold => format::toggle_wrap(text, sel, "**"),
+        ToggleItalic => format::toggle_wrap(text, sel, "*"),
+        ToggleStrikethrough => format::toggle_wrap(text, sel, "~~"),
+        ToggleHighlight => format::toggle_wrap(text, sel, "=="),
+        ToggleInlineCode => format::toggle_wrap(text, sel, "`"),
+        ToggleComment => format::toggle_wrap(text, sel, "%%"),
+        InsertLink => format::insert_link(text, sel),
+        InsertWikilink => format::insert_wikilink(text, sel),
+        ToggleChecklist => format::toggle_checklist(text, sel),
+        ToggleCheckbox => format::toggle_checkbox(text, sel),
+        ToggleBulletList => format::toggle_list(text, sel, false),
+        ToggleNumberedList => format::toggle_list(text, sel, true),
+        IndentList => format::indent_lines(text, sel),
+        OutdentList => return format::outdent_lines(text, sel),
+        MoveLineUp => return format::move_lines(text, sel, true),
+        MoveLineDown => return format::move_lines(text, sel, false),
+        _ => return None,
+    })
+}
+
 impl AppState {
     /// Handle an editor command from the palette/shortcuts.
     pub fn editor_command(&mut self, cmd: Command) {
@@ -137,7 +169,11 @@ impl AppState {
                 self.editor.line_numbers = Some(!on);
             }
             c if is_editor_command(c) => {
-                if self.active_note().is_some() {
+                let editing = self
+                    .active_tab()
+                    .and_then(|t| t.note())
+                    .is_some_and(|n| n.mode == crate::state::ViewMode::Source);
+                if editing {
                     self.editor.pending.push(c);
                 }
             }
@@ -230,6 +266,15 @@ mod tests {
         assert_eq!(line_start(t, 10), 7);
         assert_eq!(line_end(t, 1), 6);
         assert_eq!(line_of(t, 10), 1);
+    }
+
+    #[test]
+    fn run_command_wraps_selection() {
+        let mut t = "un mot".to_string();
+        let s = run_command(Command::ToggleBold, &mut t, Sel::new(3, 6));
+        assert_eq!(t, "un **mot**");
+        assert_eq!(s, Some(Sel::new(5, 8)));
+        assert_eq!(run_command(Command::Save, &mut t, Sel::caret(0)), None);
     }
 
     #[test]
