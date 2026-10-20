@@ -83,6 +83,22 @@ peuvent être développées en parallèle.
 Règles communes : chaque agent ne modifie **que** ses crates ; `cargo fmt`, `cargo clippy -D warnings`,
 `cargo test -p <crate>` doivent passer ; pas de `unsafe`, pas de `unwrap()` hors tests.
 
+## 5 bis. Phase 2b — Parité Obsidian (tags, propriétés, interface complète)
+
+**Moteur (agent F)** : édition du frontmatter qui préserve le reste du fichier, propriétés typées
+(`.obsidian/types.json` : text, multitext, number, checkbox, date, datetime, aliases, tags),
+liste de toutes les propriétés et de leurs valeurs, arbre des tags, autocomplétion `#`,
+renommage et fusion de tags dans tout le vault, commandes CLI `props`, `prop`, `tag`.
+
+**Interface (vague 2, après la base de l'agent E)** : un agent par zone, chacun dans ses propres modules de `ors-app` :
+
+| Zone | Contenu (comportement Obsidian) |
+|---|---|
+| Éditeur | Live Preview (rendu en ligne hors ligne du curseur), autocomplétion `[[`, `#`, `![[`, raccourcis de mise en forme, cases à cocher cliquables, glisser-déposer d'images vers le dossier des pièces jointes |
+| Propriétés & tags | Panneau Propriétés typé en tête de note (widgets par type, ajout/suppression/renommage, autocomplétion des valeurs), vue « Toutes les propriétés », panneau Tags hiérarchique, renommage de tag |
+| Espace de travail | Onglets et panneaux scindés, explorateur complet (glisser-déposer, tri, révéler le fichier), signets, notes quotidiennes, templates, palette de commandes, raccourcis configurables, réglages (fenêtre Settings), thèmes et snippets CSS |
+| Vues | Graphe global/local avec groupes de couleurs et forces réglables, recherche avec aperçu en contexte, backlinks avec contexte, plan (outline), mode lecture avec transclusion des embeds |
+
 ## 6. Vault d'exemple
 
 `examples/sample-vault/` : petit vault couvrant toutes les syntaxes, utilisé par les tests d'intégration,
