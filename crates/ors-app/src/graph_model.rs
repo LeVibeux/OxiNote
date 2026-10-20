@@ -280,6 +280,13 @@ impl GraphStore {
         Ok(true)
     }
 
+    /// Change the settings without scheduling a write (command-line
+    /// overrides that must not touch the vault).
+    pub fn override_unsaved(&mut self, f: impl Fn(&mut GraphSettings)) {
+        f(&mut self.settings);
+        f(&mut self.saved);
+    }
+
     pub fn has_pending(&self) -> bool {
         self.settings != self.saved
     }

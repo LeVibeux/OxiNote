@@ -1,18 +1,20 @@
 //! Reading view: draws the block tree of `crate::reading` with egui widgets
 //! (callouts, task checkboxes, recursive transclusions, link previews).
 
+use std::cell::Cell;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-use eframe::egui::{self, FontId, Frame, Margin, RichText, Sense, Stroke};
+use eframe::egui::{self, Align, FontId, Frame, Margin, RichText, Sense, Stroke};
 use ors_core::{NotePath, Subpath};
 
 use super::editor::{is_image, readable_column};
 use super::theme::Palette;
 use super::{Action, UiCaches};
 use crate::reading::{
-    Block, Inline, InlineKind, LinkRef, Prepared, parse_blocks, prepare, ref_index,
+    Block, EmbedPlan, Inline, InlineKind, LinkRef, Prepared, callout_family, callout_icon,
+    embed_plan, parse_blocks, prepare, ref_index,
 };
 use crate::state::{AppState, OpenIn};
 
@@ -62,7 +64,73 @@ pub struct Ctx<'a> {
     prepared: &'a Prepared,
     pal: Palette,
     size: f32,
-    depth: usize,
+    /// Notes being drawn, outermost first (`path` is the last one).
+    chain: Vec<NotePath>,
+    /// Only the note itself is interactive (tasks, scroll tracking), not
+    /// its transclusions and previews.
+    interactive: bool,
+    heading_n: Cell<usize>,
+    task_n: Cell<usize>,
+    callout_n: Cell<usize>,
+    /// Index of the heading to scroll to.
+    scroll_heading: Option<usize>,
+    clip_top: f32,
+    /// Line of the last heading scrolled past the top of the viewport.
+    current_line: Cell<Option<usize>>,
+}
+
+impl<'a> Ctx<'a> {
+    fn child(&self, path: &'a NotePath, prepared: &'a Prepared, chain: Vec<NotePath>) -> Self {
+        Ctx {
+            state: self.state,
+            path,
+            prepared,
+            pal: self.pal,
+            size: self.size,
+            chain,
+            interactive: false,
+            heading_n: Cell::new(0),
+            task_n: Cell::new(0),
+            callout_n: Cell::new(0),
+            scroll_heading: None,
+            clip_top: 0.0,
+            current_line: Cell::new(None),
+        }
+    }
+}
+
+/// (headings, tasks, callouts) in `blocks`, to keep the document-order
+/// counters right when a folded callout is not drawn.
+fn counts(blocks: &[Block]) -> (usize, usize, usize) {
+    let mut c = (0, 0, 0);
+    let mut add = |d: (usize, usize, usize)| {
+        c.0 += d.0;
+        c.1 += d.1;
+        c.2 += d.2;
+    };
+    for b in blocks {
+        match b {
+            Block::Heading { .. } => add((1, 0, 0)),
+            Block::Quote(inner) => add(counts(inner)),
+            Block::Callout { blocks, .. } => {
+                let d = counts(blocks);
+                add((d.0, d.1, d.2 + 1));
+            }
+            Block::List { items, .. } => {
+                for it in items {
+                    let d = counts(&it.blocks);
+                    add((d.0, d.1 + usize::from(it.task.is_some()), d.2));
+                }
+            }
+            _ => {}
+        }
+    }
+    c
+}
+
+/// Index of the heading to scroll to for `line`: the last one at or before it.
+fn heading_for_line(heading_lines: &[usize], line: usize) -> Option<usize> {
+    heading_lines.iter().rposition(|l| *l <= line)
 }
 
 pub fn reading_view(
@@ -70,12 +138,15 @@ pub fn reading_view(
     state: &AppState,
     caches: &mut UiCaches,
     path: &NotePath,
+    scroll_to: Option<usize>,
     actions: &mut Vec<Action>,
 ) {
     let text = state.note_text(path).unwrap_or_default();
     let (prepared, blocks) = rendered(state, caches, path, &text);
     let pal = Palette::of(ui.ctx());
     let size = state.settings.font_size;
+    let clip_top = ui.clip_rect().top();
+    let mut current = None;
     readable_column(ui, state.settings.readable_line_length, |ui| {
         ui.add_space(8.0);
         ui.label(
@@ -84,7 +155,7 @@ pub fn reading_view(
                 .color(pal.strong),
         );
         ui.add_space(4.0);
-        if !prepared.frontmatter.is_empty() {
+        if state.views.show_properties_table && !prepared.frontmatter.is_empty() {
             properties(ui, &prepared.frontmatter, &pal, size);
         }
         let cx = Ctx {
@@ -93,11 +164,27 @@ pub fn reading_view(
             prepared: &prepared,
             pal,
             size,
-            depth: 0,
+            chain: vec![path.clone()],
+            interactive: true,
+            heading_n: Cell::new(0),
+            task_n: Cell::new(0),
+            callout_n: Cell::new(0),
+            scroll_heading: scroll_to.and_then(|l| heading_for_line(&prepared.heading_lines, l)),
+            clip_top,
+            current_line: Cell::new(None),
         };
         draw_blocks(ui, &cx, caches, &blocks, actions);
+        current = cx.current_line.get();
         ui.add_space(40.0);
     });
+    let shown = state.views.current_line.as_ref().map(|(p, l)| (p, *l));
+    let line = current.unwrap_or(0);
+    if shown != Some((path, line)) {
+        actions.push(Action::View(crate::views::ViewAction::SetCurrentLine(
+            path.clone(),
+            line,
+        )));
+    }
 }
 
 fn properties(ui: &mut egui::Ui, props: &[(String, String)], pal: &Palette, size: f32) {
@@ -151,7 +238,21 @@ fn draw_block(
                 _ => 1.05,
             };
             ui.add_space(cx.size * 0.6);
-            inline_row(ui, cx, caches, inlines, cx.size * scale, true, actions);
+            let r = ui.scope(|ui| {
+                inline_row(ui, cx, caches, inlines, cx.size * scale, true, actions);
+            });
+            if cx.interactive {
+                let n = cx.heading_n.get();
+                cx.heading_n.set(n + 1);
+                if cx.scroll_heading == Some(n) {
+                    ui.scroll_to_rect(r.response.rect, Some(Align::TOP));
+                }
+                if r.response.rect.top() <= cx.clip_top + 24.0
+                    && let Some(l) = cx.prepared.heading_lines.get(n)
+                {
+                    cx.current_line.set(Some(*l));
+                }
+            }
             ui.add_space(cx.size * 0.2);
         }
         Block::Paragraph(inlines) => {
@@ -196,18 +297,54 @@ fn draw_block(
         Block::Callout {
             kind,
             title,
+            fold,
             blocks,
         } => {
-            let color = pal.callout(kind);
+            let color = pal.callout(callout_family(kind));
+            let n = cx.callout_n.get();
+            cx.callout_n.set(n + 1);
+            let id = ui.make_persistent_id(("callout", cx.path.as_str(), n, title));
+            let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+                ui.ctx(),
+                id,
+                *fold != Some(true),
+            );
             Frame::new()
                 .fill(color.gamma_multiply(0.12))
                 .corner_radius(6)
                 .inner_margin(Margin::same(10))
                 .show(ui, |ui| {
                     ui.set_width(ui.available_width());
-                    ui.label(RichText::new(title).color(color).size(cx.size).strong());
-                    draw_blocks(ui, cx, caches, blocks, actions);
+                    let foldable = fold.is_some();
+                    let head = ui.horizontal(|ui| {
+                        ui.label(RichText::new(callout_icon(kind)).color(color).size(cx.size));
+                        ui.label(RichText::new(title).color(color).size(cx.size).strong());
+                        if foldable {
+                            let arrow = if state.is_open() { "⏷" } else { "⏵" };
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| ui.label(RichText::new(arrow).color(color)),
+                            );
+                        }
+                    });
+                    if foldable {
+                        let r = ui
+                            .interact(head.response.rect, id.with("head"), Sense::click())
+                            .on_hover_cursor(egui::CursorIcon::PointingHand);
+                        if r.clicked() {
+                            state.toggle(ui);
+                        }
+                    }
+                    if !foldable || state.is_open() {
+                        draw_blocks(ui, cx, caches, blocks, actions);
+                    } else {
+                        let d = counts(blocks);
+                        cx.heading_n.set(cx.heading_n.get() + d.0);
+                        cx.task_n.set(cx.task_n.get() + d.1);
+                        cx.callout_n.set(cx.callout_n.get() + d.2);
+                    }
                 });
+            state.store(ui.ctx());
             ui.add_space(cx.size * 0.5);
         }
         Block::List { start, items } => {
@@ -225,7 +362,29 @@ fn draw_block(
                     } else {
                         pal.muted
                     };
-                    ui.label(RichText::new(marker).size(cx.size).color(color));
+                    let mark = ui.add(
+                        egui::Label::new(RichText::new(marker).size(cx.size).color(color))
+                            .sense(if item.task.is_some() && cx.interactive {
+                                Sense::click()
+                            } else {
+                                Sense::hover()
+                            }),
+                    );
+                    if item.task.is_some() {
+                        let t = cx.task_n.get();
+                        cx.task_n.set(t + 1);
+                        if cx.interactive {
+                            let mark = mark.on_hover_cursor(egui::CursorIcon::PointingHand);
+                            if mark.clicked()
+                                && let Some(line) = cx.prepared.task_lines.get(t)
+                            {
+                                actions.push(Action::View(crate::views::ViewAction::ToggleTask {
+                                    path: cx.path.clone(),
+                                    line: *line,
+                                }));
+                            }
+                        }
+                    }
                     ui.vertical(|ui| {
                         if item.task == Some(true) {
                             ui.style_mut().visuals.override_text_color = Some(pal.muted);
@@ -340,7 +499,7 @@ fn flush_run(
 fn draw_inline(
     ui: &mut egui::Ui,
     cx: &Ctx<'_>,
-    _caches: &mut UiCaches,
+    caches: &mut UiCaches,
     inline: &Inline,
     size: f32,
     strong: bool,
@@ -370,11 +529,25 @@ fn draw_inline(
                         )
                         .sense(Sense::click()),
                     )
-                    .on_hover_cursor(egui::CursorIcon::PointingHand)
-                    .on_hover_text(match resolved {
-                        Some(p) => p.as_str().to_string(),
-                        None => format!("{target} (not created yet — click to create)"),
-                    });
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                // Ctrl held: preview of the note; otherwise a plain tooltip.
+                let preview = ui.input(|i| i.modifiers.command)
+                    .then_some(resolved.as_ref())
+                    .flatten()
+                    .filter(|p| p.is_markdown());
+                match preview {
+                    Some(p) => {
+                        r.clone().on_hover_ui(|ui| {
+                            link_preview(ui, cx, caches, p, subpath.as_ref(), actions)
+                        });
+                    }
+                    None => {
+                        r.clone().on_hover_text(match resolved {
+                            Some(p) => p.as_str().to_string(),
+                            None => format!("{target} (not created yet — click to create)"),
+                        });
+                    }
+                }
                 if r.hovered() {
                     let rect = r.rect;
                     ui.painter().line_segment(
@@ -431,6 +604,33 @@ fn draw_inline(
             ui.hyperlink_to(&inline.text, url);
         }
     }
+}
+
+/// Hover preview of a note (or of the section a link points to), drawn like
+/// a transclusion; at most 30 lines.
+fn link_preview(
+    ui: &mut egui::Ui,
+    cx: &Ctx<'_>,
+    caches: &mut UiCaches,
+    path: &NotePath,
+    subpath: Option<&Subpath>,
+    actions: &mut Vec<Action>,
+) {
+    ui.set_max_width(440.0);
+    let Some(full) = cx.state.note_text(path) else {
+        return;
+    };
+    let section = section_of(cx.state, path, &full, subpath);
+    let text: String = section.lines().take(30).collect::<Vec<_>>().join("\n");
+    let parsed = cx.state.parsed_with_text(path, &text);
+    let prepared = prepare(&text, &parsed, path, &*cx.state.index);
+    let blocks = parse_blocks(&prepared.markdown);
+    let mut chain = cx.chain.clone();
+    chain.push(path.clone());
+    let inner = cx.child(path, &prepared, chain);
+    ui.label(RichText::new(path.stem()).strong().color(cx.pal.accent));
+    ui.separator();
+    draw_blocks(ui, &inner, caches, &blocks, actions);
 }
 
 /// Line of the heading/block a subpath points to, if it can be found.
@@ -547,9 +747,16 @@ fn draw_embed(
             if r.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                 actions.push(Action::Open(path.clone(), OpenIn::CurrentTab));
             }
-            if cx.depth >= 1 || path == cx.path && subpath.is_none() {
-                ui.label(RichText::new("…").color(pal.faint));
-                return;
+            match embed_plan(&cx.chain, path) {
+                EmbedPlan::Render => {}
+                EmbedPlan::Cycle => {
+                    ui.label(RichText::new("↻ circular embed").color(pal.faint));
+                    return;
+                }
+                EmbedPlan::TooDeep => {
+                    ui.label(RichText::new("…").color(pal.faint));
+                    return;
+                }
             }
             let Some(full) = cx.state.note_text(path) else {
                 return;
@@ -562,14 +769,9 @@ fn draw_embed(
             };
             let prepared = prepare(&text, &parsed, path, &*cx.state.index);
             let blocks = parse_blocks(&prepared.markdown);
-            let inner = Ctx {
-                state: cx.state,
-                path,
-                prepared: &prepared,
-                pal,
-                size: cx.size,
-                depth: cx.depth + 1,
-            };
+            let mut chain = cx.chain.clone();
+            chain.push(path.clone());
+            let inner = cx.child(path, &prepared, chain);
             draw_blocks(ui, &inner, caches, &blocks, actions);
         });
     ui.add_space(cx.size * 0.4);

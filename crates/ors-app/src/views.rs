@@ -461,6 +461,70 @@ pub fn toggle_task(source: &str, line: usize) -> Option<String> {
     Some(out)
 }
 
+/// Byte ranges of the case-insensitive occurrences of `terms` in `text`
+/// (non-overlapping, sorted).
+pub fn highlight_terms(text: &str, terms: &[&str]) -> Vec<(usize, usize)> {
+    let mut out: Vec<(usize, usize)> = Vec::new();
+    let mut i = 0;
+    while i < text.len() {
+        if !text.is_char_boundary(i) {
+            i += 1;
+            continue;
+        }
+        let hit = terms
+            .iter()
+            .filter(|t| !t.is_empty())
+            .filter_map(|t| match_ci(&text[i..], t).map(|e| i + e))
+            .max();
+        match hit {
+            Some(end) => {
+                out.push((i, end));
+                i = end;
+            }
+            None => i += 1,
+        }
+    }
+    out
+}
+
+/// Has the search box been quiet for `delay` seconds (or never edited)?
+pub fn debounce_ready(edited: Option<f64>, now: f64, delay: f64) -> bool {
+    edited.is_none_or(|t| now - t >= delay)
+}
+
+/// Node of the outline tree: index in the heading list and children.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OutlineNode {
+    pub index: usize,
+    pub children: Vec<OutlineNode>,
+}
+
+/// Nest headings by level: a heading's children are the following deeper
+/// headings (levels may skip, like `#` then `###`).
+pub fn outline_tree(levels: &[u8]) -> Vec<OutlineNode> {
+    fn build(levels: &[u8], pos: &mut usize, parent_level: u8) -> Vec<OutlineNode> {
+        let mut out = Vec::new();
+        while *pos < levels.len() && levels[*pos] > parent_level {
+            let index = *pos;
+            let level = levels[index];
+            *pos += 1;
+            let children = build(levels, pos, level);
+            out.push(OutlineNode { index, children });
+        }
+        out
+    }
+    let mut pos = 0;
+    build(levels, &mut pos, 0)
+}
+
+/// Does heading `index` or one of its descendants contain `filter`?
+pub fn outline_matches(node: &OutlineNode, texts: &[&str], filter: &str) -> bool {
+    texts
+        .get(node.index)
+        .is_some_and(|t| t.to_lowercase().contains(filter))
+        || node.children.iter().any(|c| outline_matches(c, texts, filter))
+}
+
 /// Cached results of a pane, recomputed when the key changes.
 #[derive(Debug, Clone)]
 pub struct Cached<K, V> {
@@ -497,6 +561,8 @@ pub struct ViewsState {
     /// Outgoing unlinked mentions of the active note: (mention, target).
     pub outgoing_mentions: Cached<(NotePath, u64), Vec<(Mention, NotePath)>>,
     pub outline_filter: String,
+    /// Search results sorted for display.
+    pub sorted: Cached<(String, u64, SortOrder), Vec<SearchResult>>,
     /// Line of the cursor (editor) or of the top of the viewport (reading
     /// view) of the active note, for the outline highlight.
     pub current_line: Option<(NotePath, usize)>,
@@ -522,6 +588,7 @@ impl ViewsState {
             search: SearchOptions::default(),
             search_edited: None,
             backlinks: BacklinkOptions {
+                show_unlinked: true,
                 in_document,
                 ..BacklinkOptions::default()
             },
@@ -529,6 +596,7 @@ impl ViewsState {
             unlinked: Cached::default(),
             outgoing_mentions: Cached::default(),
             outline_filter: String::new(),
+            sorted: Cached::default(),
             current_line: None,
             show_properties_table: true,
             backlink_config,
@@ -702,6 +770,8 @@ pub enum ViewAction {
         line: usize,
     },
     OpenExternally(NotePath),
+    /// The reading view scrolled: line of the current heading.
+    SetCurrentLine(NotePath, usize),
     /// Show the search pane with this query.
     Search(String),
 }
@@ -729,6 +799,7 @@ pub fn apply(state: &mut AppState, action: ViewAction) {
             }
         }
         ViewAction::OpenExternally(path) => open_externally(state, &path),
+        ViewAction::SetCurrentLine(path, line) => state.views.current_line = Some((path, line)),
         ViewAction::Search(q) => {
             state.search_query = q;
             state.execute(crate::commands::Command::SearchVault);
@@ -747,6 +818,14 @@ pub fn reveal_line(state: &mut AppState, path: &NotePath, line: usize, open_in: 
     {
         tab.pending_line = Some(line);
     }
+}
+
+/// Take the line the active note tab must reveal (reading view).
+pub fn take_pending_line(state: &mut AppState) -> Option<usize> {
+    state
+        .active_tab_mut()
+        .and_then(Tab::note_mut)
+        .and_then(|n| n.pending_line.take())
 }
 
 /// Apply `f` to the text of `path` (open buffer or file on disk) and keep
@@ -810,6 +889,25 @@ pub fn active_mode(state: &AppState) -> Option<ViewMode> {
 mod tests {
     use super::*;
     use crate::fake::naive_parse;
+
+    #[test]
+    fn terms_debounce_and_outline_tree() {
+        assert_eq!(highlight_terms("Rust and RUST", &["rust"]), vec![(0, 4), (9, 13)]);
+        assert_eq!(highlight_terms("été", &["É"]), vec![(0, 2), (3, 5)]);
+        assert!(highlight_terms("abc", &[""]).is_empty());
+        assert!(debounce_ready(None, 5.0, 0.3));
+        assert!(!debounce_ready(Some(5.0), 5.1, 0.3));
+        assert!(debounce_ready(Some(5.0), 5.4, 0.3));
+        // # A / ## B / ### C / ## D / # E / ### F
+        let t = outline_tree(&[1, 2, 3, 2, 1, 3]);
+        assert_eq!(t.len(), 2);
+        assert_eq!(t[0].children.len(), 2);
+        assert_eq!(t[0].children[0].children[0].index, 2);
+        assert_eq!(t[1].children[0].index, 5);
+        let texts = ["A", "B", "C", "D", "E", "Foo"];
+        assert!(outline_matches(&t[1], &texts, "foo"));
+        assert!(!outline_matches(&t[0], &texts, "foo"));
+    }
 
     #[test]
     fn effective_query_and_explain() {

@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use eframe::egui::{self, Color32, Frame, Margin, RichText, Sense, Stroke, text::LayoutJob};
+use eframe::egui::{self, Color32, Frame, Margin, RichText, Sense, Stroke};
 use ors_core::NotePath;
 
 use super::theme::Palette;
@@ -12,7 +12,7 @@ use crate::commands::Command;
 use crate::settings::{LeftPane, RightPane};
 use crate::state::{AppState, FsTarget, Modal, OpenIn, TabContent, ViewMode};
 
-fn open_in_from(ui: &egui::Ui, resp: &egui::Response) -> OpenIn {
+pub(super) fn open_in_from(ui: &egui::Ui, resp: &egui::Response) -> OpenIn {
     if resp.middle_clicked() || ui.input(|i| i.modifiers.command) {
         OpenIn::NewTab
     } else {
@@ -252,116 +252,8 @@ fn folder_contents(
     }
 }
 
-fn highlighted_line(text: &str, ranges: &[(usize, usize)], pal: &Palette) -> LayoutJob {
-    let mut job = LayoutJob::default();
-    let normal = egui::TextFormat {
-        color: pal.muted,
-        font_id: egui::FontId::proportional(12.5),
-        ..Default::default()
-    };
-    let hit = egui::TextFormat {
-        color: pal.strong,
-        background: pal.highlight_bg,
-        ..normal.clone()
-    };
-    let mut pos = 0;
-    let mut sorted: Vec<(usize, usize)> = ranges.to_vec();
-    sorted.sort_unstable();
-    for (s, e) in sorted {
-        if s < pos || e > text.len() || !text.is_char_boundary(s) || !text.is_char_boundary(e) {
-            continue;
-        }
-        job.append(&text[pos..s], 0.0, normal.clone());
-        job.append(&text[s..e], 0.0, hit.clone());
-        pos = e;
-    }
-    job.append(&text[pos..], 0.0, normal);
-    job.wrap.max_rows = 3;
-    job
-}
-
 fn search_pane(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Action>) {
-    let pal = Palette::of(ui.ctx());
-    let resp = ui.add(
-        egui::TextEdit::singleline(&mut state.search_query)
-            .hint_text("Search…  (tag:#x  path:  \"phrase\"  -not)")
-            .desired_width(f32::INFINITY),
-    );
-    if state.focus_search {
-        resp.request_focus();
-        state.focus_search = false;
-    }
-    state.refresh_search();
-    ui.add_space(4.0);
-    let results = match &state.search_results {
-        Ok(r) => r,
-        Err(e) => {
-            ui.label(
-                RichText::new(format!("Invalid query: {e}"))
-                    .color(Color32::from_rgb(0xe9, 0x31, 0x47)),
-            );
-            return;
-        }
-    };
-    if !state.search_query.trim().is_empty() {
-        ui.label(
-            RichText::new(format!("{} results", results.len()))
-                .small()
-                .color(pal.faint),
-        );
-    }
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            for r in results {
-                let id = ui.make_persistent_id(("search", r.path.as_str()));
-                egui::collapsing_header::CollapsingState::load_with_default_open(
-                    ui.ctx(),
-                    id,
-                    true,
-                )
-                .show_header(ui, |ui| {
-                    let l = ui
-                        .add(
-                            egui::Label::new(RichText::new(r.path.stem()).color(pal.strong))
-                                .sense(Sense::click()),
-                        )
-                        .on_hover_text(r.path.as_str());
-                    if l.clicked() || l.middle_clicked() {
-                        actions.push(Action::Open(r.path.clone(), open_in_from(ui, &l)));
-                    }
-                    if !r.matches.is_empty() {
-                        ui.label(
-                            RichText::new(r.matches.len().to_string())
-                                .small()
-                                .color(pal.faint),
-                        );
-                    }
-                })
-                .body(|ui| {
-                    for m in &r.matches {
-                        let job = highlighted_line(&m.line_text, &m.ranges, &pal);
-                        let resp = Frame::new()
-                            .inner_margin(Margin::symmetric(6, 3))
-                            .corner_radius(4)
-                            .fill(pal.bg_primary)
-                            .show(ui, |ui| {
-                                ui.set_width(ui.available_width());
-                                ui.add(egui::Label::new(job).wrap().sense(Sense::click()))
-                            });
-                        let l = resp.inner.on_hover_cursor(egui::CursorIcon::PointingHand);
-                        if l.clicked() || l.middle_clicked() {
-                            actions.push(Action::OpenLine(
-                                r.path.clone(),
-                                m.line,
-                                open_in_from(ui, &l),
-                            ));
-                        }
-                        ui.add_space(2.0);
-                    }
-                });
-            }
-        });
+    super::view_panes::search_pane(ui, state, actions);
 }
 
 #[derive(Default)]
@@ -474,142 +366,16 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
         super::graph::local_graph_pane(ui, state, actions);
         return;
     }
-    let info = state.note_info().clone();
-    let Some(path) = info.path.clone() else {
+    let Some(path) = state.active_note().cloned() else {
         ui.label(RichText::new("No file is open.").color(pal.muted));
         return;
     };
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| match pane {
-            RightPane::Backlinks => {
-                section_title(
-                    ui,
-                    &format!("Linked mentions ({})", info.backlink_count),
-                    &pal,
-                );
-                if info.backlinks.is_empty() {
-                    ui.label(RichText::new("No backlinks found.").color(pal.faint));
-                }
-                for (src, lines) in &info.backlinks {
-                    let l = ui
-                        .add(
-                            egui::Label::new(RichText::new(src.stem()).color(pal.strong))
-                                .sense(Sense::click()),
-                        )
-                        .on_hover_text(src.as_str());
-                    if l.clicked() || l.middle_clicked() {
-                        actions.push(Action::Open(src.clone(), open_in_from(ui, &l)));
-                    }
-                    for (line, text) in lines {
-                        let resp = Frame::new()
-                            .inner_margin(Margin::symmetric(6, 3))
-                            .corner_radius(4)
-                            .fill(pal.bg_primary)
-                            .show(ui, |ui| {
-                                ui.set_width(ui.available_width());
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(text).size(12.5).color(pal.muted),
-                                    )
-                                    .wrap()
-                                    .sense(Sense::click()),
-                                )
-                            });
-                        let r = resp.inner.on_hover_cursor(egui::CursorIcon::PointingHand);
-                        if r.clicked() || r.middle_clicked() {
-                            actions.push(Action::OpenLine(
-                                src.clone(),
-                                *line,
-                                open_in_from(ui, &r),
-                            ));
-                        }
-                    }
-                    ui.add_space(6.0);
-                }
-                ui.add_space(8.0);
-                section_title(
-                    ui,
-                    &format!("Unlinked mentions ({})", info.unlinked.len()),
-                    &pal,
-                );
-                for src in &info.unlinked {
-                    let l = ui.add(
-                        egui::Label::new(RichText::new(src.stem()).color(pal.text))
-                            .sense(Sense::click()),
-                    );
-                    if l.clicked() || l.middle_clicked() {
-                        actions.push(Action::Open(src.clone(), open_in_from(ui, &l)));
-                    }
-                }
-            }
-            RightPane::Outgoing => {
-                let (resolved, unresolved): (Vec<_>, Vec<_>) =
-                    info.outgoing.iter().partition(|l| l.target.is_some());
-                section_title(ui, &format!("Links ({})", resolved.len()), &pal);
-                let mut seen = std::collections::HashSet::new();
-                for l in resolved {
-                    let Some(t) = &l.target else { continue };
-                    if !seen.insert(t.clone()) {
-                        continue;
-                    }
-                    let r = ui
-                        .add(
-                            egui::Label::new(RichText::new(t.stem()).color(pal.accent))
-                                .sense(Sense::click()),
-                        )
-                        .on_hover_text(t.as_str());
-                    if r.clicked() || r.middle_clicked() {
-                        actions.push(Action::Open(t.clone(), open_in_from(ui, &r)));
-                    }
-                }
-                ui.add_space(8.0);
-                section_title(ui, &format!("Unresolved ({})", unresolved.len()), &pal);
-                for l in unresolved {
-                    let r = ui
-                        .add(
-                            egui::Label::new(RichText::new(&l.link.target).color(pal.unresolved))
-                                .sense(Sense::click()),
-                        )
-                        .on_hover_text("Click to create");
-                    if r.clicked() {
-                        actions.push(Action::Follow {
-                            target: l.link.target.clone(),
-                            from: path.clone(),
-                            open_in: OpenIn::CurrentTab,
-                        });
-                    }
-                }
-            }
-            RightPane::LocalGraph => {}
-            RightPane::Outline => {
-                if info.headings.is_empty() {
-                    ui.label(RichText::new("No headings.").color(pal.faint));
-                }
-                let min_level = info.headings.iter().map(|h| h.level).min().unwrap_or(1);
-                for h in &info.headings {
-                    ui.horizontal(|ui| {
-                        ui.add_space(f32::from(h.level - min_level) * 14.0);
-                        let r = ui.add(
-                            egui::Label::new(RichText::new(&h.text).color(pal.text))
-                                .sense(Sense::click()),
-                        );
-                        if r.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
-                            actions.push(Action::OpenLine(
-                                path.clone(),
-                                h.line,
-                                OpenIn::CurrentTab,
-                            ));
-                        }
-                    });
-                }
-            }
-        });
-}
-
-fn section_title(ui: &mut egui::Ui, text: &str, pal: &Palette) {
-    ui.label(RichText::new(text).small().strong().color(pal.muted));
-    ui.add_space(2.0);
+    match pane {
+        RightPane::Backlinks => super::view_panes::backlinks_pane(ui, state, &path, actions),
+        RightPane::Outgoing => super::view_panes::outgoing_pane(ui, state, &path, actions),
+        RightPane::Outline => super::view_panes::outline_pane(ui, state, &path, actions),
+        RightPane::LocalGraph => {}
+    }
 }
 
 // ---------------------------------------------------------------------------

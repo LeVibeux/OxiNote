@@ -5,6 +5,7 @@
 mod editor;
 mod graph;
 mod reading_view;
+mod view_panes;
 mod modals;
 mod panes;
 #[cfg(test)]
@@ -122,6 +123,8 @@ pub struct Startup {
     pub open: Vec<String>,
     pub reading: bool,
     pub graph: bool,
+    /// Open the graph settings panel (screenshots).
+    pub graph_panel: bool,
     pub palette: bool,
     pub switcher: Option<String>,
     pub search: Option<String>,
@@ -269,6 +272,15 @@ impl ObsiApp {
         if let Some(q) = &s.search {
             state.search_query = q.clone();
             state.settings.left_pane = LeftPane::Search;
+        }
+        if s.graph_panel {
+            state.views.graph.override_unsaved(|g| {
+                g.close = false;
+                g.collapse_filter = false;
+                g.collapse_color_groups = false;
+                g.collapse_display = false;
+                g.collapse_forces = false;
+            });
         }
         if s.graph {
             state.open_graph(false);
@@ -582,6 +594,11 @@ fn central(
             {
                 editor::conflict_banner(ui, &path, actions);
             }
+            let scroll_to = if mode == ViewMode::Reading {
+                crate::views::take_pending_line(state)
+            } else {
+                None
+            };
             egui::ScrollArea::vertical()
                 .id_salt(("note-scroll", tab_id, mode == ViewMode::Reading))
                 .auto_shrink([false, false])
@@ -589,7 +606,7 @@ fn central(
                     if !path.is_markdown() {
                         editor::file_view(ui, state, caches, &path);
                     } else if mode == ViewMode::Reading {
-                        reading_view::reading_view(ui, state, caches, &path, actions);
+                        reading_view::reading_view(ui, state, caches, &path, scroll_to, actions);
                     } else {
                         editor::source_view(ui, state, caches, tab_id, &path, actions);
                     }

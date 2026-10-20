@@ -41,6 +41,10 @@ pub struct Prepared {
     anchors: Vec<(usize, usize, bool)>,
     /// Start offsets of the source lines.
     line_starts: Vec<usize>,
+    /// Source line of every heading / task, in document order (the n-th
+    /// heading or task block drawn is the n-th entry).
+    pub heading_lines: Vec<usize>,
+    pub task_lines: Vec<usize>,
 }
 
 impl Prepared {
@@ -89,7 +93,11 @@ pub fn prepare(
     note: &NotePath,
     resolver: &dyn LinkResolver,
 ) -> Prepared {
-    let mut prepared = Prepared::default();
+    let mut prepared = Prepared {
+        heading_lines: parsed.headings.iter().map(|h| h.line).collect(),
+        task_lines: parsed.tasks.iter().map(|t| t.line).collect(),
+        ..Prepared::default()
+    };
     if let Some(fm) = &parsed.frontmatter {
         for (k, v) in fm {
             let value = match v {
@@ -267,6 +275,9 @@ pub enum Block {
     Callout {
         kind: String,
         title: String,
+        /// `[!note]-` (`Some(true)`, folded by default) or `[!note]+`
+        /// (`Some(false)`, open but foldable); `None`: not foldable.
+        fold: Option<bool>,
         blocks: Vec<Block>,
     },
     List {
@@ -650,6 +661,11 @@ fn to_callout(blocks: Vec<Block>) -> Block {
         return Block::Quote(blocks);
     };
     let kind = rest[..close].to_lowercase();
+    let fold = match rest[close + 1..].chars().next() {
+        Some('-') => Some(true),
+        Some('+') => Some(false),
+        _ => None,
+    };
     let after = rest[close + 1..].trim_start_matches(['-', '+']);
     // Title runs until the first line break (soft breaks became " ", so
     // only the first text run is used).
@@ -687,7 +703,70 @@ fn to_callout(blocks: Vec<Block>) -> Block {
     Block::Callout {
         kind,
         title,
+        fold,
         blocks,
+    }
+}
+
+/// Deepest level of nested `![[Note]]` transclusions that is drawn.
+pub const MAX_EMBED_DEPTH: usize = 3;
+
+/// What to do with an embed of `target` met while drawing the notes in
+/// `chain` (outermost first, the last one is the note being drawn).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EmbedPlan {
+    Render,
+    /// `target` is already being drawn: embedding it would loop forever.
+    Cycle,
+    TooDeep,
+}
+
+pub fn embed_plan(chain: &[NotePath], target: &NotePath) -> EmbedPlan {
+    if chain.contains(target) {
+        EmbedPlan::Cycle
+    } else if chain.len() > MAX_EMBED_DEPTH {
+        EmbedPlan::TooDeep
+    } else {
+        EmbedPlan::Render
+    }
+}
+
+/// Callout type with Obsidian's aliases resolved (`warning`, `error`...).
+pub fn callout_family(kind: &str) -> &'static str {
+    match kind {
+        "note" => "note",
+        "abstract" | "summary" | "tldr" => "abstract",
+        "info" => "info",
+        "todo" => "todo",
+        "tip" | "hint" | "important" => "tip",
+        "success" | "check" | "done" => "success",
+        "question" | "help" | "faq" => "question",
+        "warning" | "caution" | "attention" => "warning",
+        "failure" | "fail" | "missing" => "failure",
+        "danger" | "error" => "danger",
+        "bug" => "bug",
+        "example" => "example",
+        "quote" | "cite" => "quote",
+        _ => "note",
+    }
+}
+
+/// Icon of a callout type.
+pub fn callout_icon(kind: &str) -> &'static str {
+    match callout_family(kind) {
+        "abstract" => "≡",
+        "info" => "ⓘ",
+        "todo" => "☑",
+        "tip" => "★",
+        "success" => "✔",
+        "question" => "?",
+        "warning" => "⚠",
+        "failure" => "✖",
+        "danger" => "⚡",
+        "bug" => "✱",
+        "example" => "☰",
+        "quote" => "❝",
+        _ => "✎",
     }
 }
 
@@ -738,6 +817,7 @@ mod tests {
             kind,
             title,
             blocks: inner,
+            ..
         } = &blocks[4]
         else {
             panic!("{:?}", blocks[4])
@@ -752,5 +832,57 @@ mod tests {
         );
         assert_eq!(ref_index("ors:12"), Some(12));
         assert_eq!(ref_index("https://x"), None);
+    }
+
+    #[test]
+    fn embed_plan_guards_cycles_and_depth() {
+        let p = |n: &str| NotePath::new(n).unwrap();
+        assert_eq!(embed_plan(&[p("a.md")], &p("b.md")), EmbedPlan::Render);
+        assert_eq!(embed_plan(&[p("a.md")], &p("a.md")), EmbedPlan::Cycle);
+        assert_eq!(
+            embed_plan(&[p("a.md"), p("b.md")], &p("a.md")),
+            EmbedPlan::Cycle
+        );
+        let deep = [p("a.md"), p("b.md"), p("c.md"), p("d.md")];
+        assert_eq!(embed_plan(&deep[..3], &p("e.md")), EmbedPlan::Render);
+        assert_eq!(embed_plan(&deep, &p("e.md")), EmbedPlan::TooDeep);
+    }
+
+    #[test]
+    fn callout_fold_markers_and_families() {
+        let b = parse_blocks("> [!warning]- Careful
+> body
+
+> [!note]+ Open
+> x
+
+> [!tip] Plain
+> y
+");
+        let folds: Vec<Option<bool>> = b
+            .iter()
+            .filter_map(|b| match b {
+                Block::Callout { fold, .. } => Some(*fold),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(folds, vec![Some(true), Some(false), None]);
+        assert_eq!(callout_family("error"), "danger");
+        assert_eq!(callout_family("unknown"), "note");
+        assert_ne!(callout_icon("tip"), callout_icon("bug"));
+    }
+
+    #[test]
+    fn prepare_lists_heading_and_task_lines() {
+        let src = "# T
+
+- [ ] a
+- [x] b
+
+## U
+";
+        let p = prepare(src, &ors_markdown::parse(src), &NotePath::new("a.md").unwrap(), &NoResolver);
+        assert_eq!(p.heading_lines, vec![0, 5]);
+        assert_eq!(p.task_lines, vec![2, 3]);
     }
 }
