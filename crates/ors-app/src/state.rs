@@ -8,9 +8,9 @@
 use std::collections::HashMap;
 
 use ors_core::{Heading, NotePath, ParsedNote, VaultEvent, VaultRead};
-use ors_index::{GraphOptions, ResolvedLink, SearchResult};
+use ors_index::{ResolvedLink, SearchResult};
 
-use crate::backend::{IndexBackend, LayoutEngine, VaultBackend};
+use crate::backend::{IndexBackend, VaultBackend};
 use crate::commands::{Command, CommandRegistry};
 use crate::settings::{LeftPane, Settings, ThemeChoice};
 use crate::util::{today, valid_file_name};
@@ -43,108 +43,7 @@ pub struct NoteTab {
     pub pending_line: Option<usize>,
 }
 
-/// Graph view tab state.
-pub struct GraphTab {
-    /// Local graph around `center` instead of the whole vault.
-    pub local: bool,
-    pub center: Option<NotePath>,
-    pub depth: usize,
-    pub show_tags: bool,
-    pub show_attachments: bool,
-    pub show_unresolved: bool,
-    pub show_orphans: bool,
-    pub filter: String,
-    pub data: ors_core::GraphData,
-    pub layout: Option<Box<dyn LayoutEngine>>,
-    /// Key of the last build (index generation + options), to rebuild lazily.
-    built_key: Option<String>,
-    pub pan: (f32, f32),
-    pub zoom: f32,
-    pub dragging: Option<usize>,
-    pub energy: f32,
-    pub show_filters: bool,
-    /// The view was fitted to the graph bounds once.
-    pub fitted: bool,
-}
-
-impl GraphTab {
-    pub fn new(center: Option<NotePath>) -> Self {
-        Self {
-            local: center.is_some(),
-            center,
-            depth: 1,
-            show_tags: false,
-            show_attachments: false,
-            show_unresolved: true,
-            show_orphans: true,
-            filter: String::new(),
-            data: ors_core::GraphData::default(),
-            layout: None,
-            built_key: None,
-            pan: (0.0, 0.0),
-            zoom: 1.0,
-            dragging: None,
-            energy: 1.0,
-            show_filters: true,
-            fitted: false,
-        }
-    }
-
-    fn key(&self, generation: u64) -> String {
-        format!(
-            "{generation}|{}|{:?}|{}|{}{}{}{}|{}",
-            self.local,
-            self.center,
-            self.depth,
-            self.show_tags,
-            self.show_attachments,
-            self.show_unresolved,
-            self.show_orphans,
-            self.filter
-        )
-    }
-
-    /// Rebuild the displayed graph if the index or the options changed.
-    /// Returns true when rebuilt.
-    pub fn refresh(&mut self, index: &dyn IndexBackend, generation: u64) -> bool {
-        let key = self.key(generation);
-        if self.built_key.as_deref() == Some(key.as_str()) {
-            return false;
-        }
-        let opts = GraphOptions {
-            include_tags: self.show_tags,
-            include_attachments: self.show_attachments,
-            include_unresolved: self.show_unresolved,
-            include_orphans: self.show_orphans || self.local,
-        };
-        let mut g = index.graph(&opts);
-        if self.local
-            && let Some(c) = &self.center
-        {
-            g = match g.node_index(c.as_str()) {
-                Some(i) => ors_graph::local_graph(&g, i, self.depth),
-                None => ors_core::GraphData::default(),
-            };
-        }
-        let filter = self.filter.trim().to_lowercase();
-        if !filter.is_empty() {
-            g = ors_graph::filter_graph(&g, |n| {
-                n.label.to_lowercase().contains(&filter) || n.id.to_lowercase().contains(&filter)
-            });
-        }
-        match &mut self.layout {
-            Some(layout) => {
-                layout.sync(&self.data, &g);
-                layout.reheat(0.3);
-            }
-            None => self.layout = Some(index.new_layout(&g)),
-        }
-        self.data = g;
-        self.built_key = Some(key);
-        self.energy = 1.0;
-        true
-    }
-}
+pub use crate::graph_model::GraphTab;
 
 pub enum TabContent {
     Note(NoteTab),
@@ -286,6 +185,8 @@ pub struct AppState {
     pub switch_vault_requested: bool,
     /// Focus the search field on next frame.
     pub focus_search: bool,
+    /// Graph, search, backlinks, outline and reading view state.
+    pub views: crate::views::ViewsState,
 }
 
 impl AppState {
@@ -295,7 +196,9 @@ impl AppState {
         settings: Settings,
     ) -> Self {
         let index = index_factory(vault.as_read());
+        let views = crate::views::ViewsState::new(vault.root().as_deref());
         let mut state = Self {
+            views,
             index,
             index_factory,
             commands: CommandRegistry::default(),
@@ -1147,16 +1050,15 @@ impl AppState {
 
     /// Re-run the search if the query or the index changed.
     pub fn refresh_search(&mut self) {
-        let key = (self.search_query.clone(), self.generation);
+        let query = crate::views::effective_query(&self.search_query, &self.views.search);
+        let key = (query.clone(), self.generation);
         if self.search_key.as_ref() == Some(&key) {
             return;
         }
-        self.search_results = if self.search_query.trim().is_empty() {
+        self.search_results = if query.is_empty() {
             Ok(Vec::new())
         } else {
-            self.index
-                .search(&self.search_query)
-                .map_err(|e| e.to_string())
+            self.index.search(&query).map_err(|e| e.to_string())
         };
         self.search_key = Some(key);
     }
@@ -1620,7 +1522,7 @@ mod tests {
         };
         assert!(g.refresh(index, generation));
         assert!(!g.refresh(index, generation));
-        g.depth = 2;
+        g.settings.local_jumps = Some(2);
         assert!(g.refresh(index, generation));
         // Global graph tab is reused.
         s.execute(Command::OpenGraph);

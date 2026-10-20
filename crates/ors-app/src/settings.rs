@@ -27,6 +27,7 @@ pub enum RightPane {
     Backlinks,
     Outgoing,
     Outline,
+    LocalGraph,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

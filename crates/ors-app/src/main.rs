@@ -14,12 +14,14 @@
 mod backend;
 mod commands;
 mod fake;
+mod graph_model;
 mod highlight;
 mod reading;
 mod settings;
 mod state;
 mod ui;
 mod util;
+mod views;
 
 use std::path::PathBuf;
 

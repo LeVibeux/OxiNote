@@ -522,6 +522,8 @@ pub trait LayoutEngine {
     fn bounds(&self) -> (Vec2, Vec2);
     /// Wake the simulation up (after a drag or a graph change).
     fn reheat(&mut self, _alpha: f32) {}
+    /// Change the forces (graph settings sliders).
+    fn set_params(&mut self, _params: ForceParams) {}
 }
 
 /// [`ForceLayout`] from `ors-graph`.
@@ -548,6 +550,9 @@ impl LayoutEngine for ForceEngine {
     }
     fn reheat(&mut self, alpha: f32) {
         self.0.reheat(alpha);
+    }
+    fn set_params(&mut self, params: ForceParams) {
+        self.0.params = params;
     }
 }
 
