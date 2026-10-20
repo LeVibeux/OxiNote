@@ -310,7 +310,7 @@ pub fn now_millis() -> i64 {
 mod tests {
     use super::*;
 
-    const OBSIDIAN: &str = r#"{
+    const OBSIDIAN: &str = r##"{
   "items": [
     {"type": "file", "ctime": 1700000000000, "path": "Accueil.md"},
     {"type": "file", "ctime": 1700000000001, "path": "Projets/Rust notes.md", "subpath": "#Ownership"},
@@ -321,7 +321,7 @@ mod tests {
     {"type": "graph", "ctime": 1700000000005, "options": {"depth": 2}, "title": "G"}
   ],
   "rev": 3
-}"#;
+}"##;
 
     #[test]
     fn obsidian_round_trip() {

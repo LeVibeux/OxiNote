@@ -56,6 +56,7 @@ pub fn left_sidebar(
         LeftPane::Files => explorer(ui, state, caches, actions),
         LeftPane::Search => search_pane(ui, state, actions),
         LeftPane::Tags => tags_pane(ui, state, actions),
+        LeftPane::Bookmarks => {}
     }
 }
 

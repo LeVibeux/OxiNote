@@ -12,14 +12,21 @@
 //! `--right backlinks|outgoing|outline`, `--fresh`, `--renderer glow|wgpu`.
 
 mod backend;
+mod bookmarks;
 mod commands;
+mod explorer;
 mod fake;
 mod highlight;
+mod hotkeys;
+mod plugins;
 mod reading;
 mod settings;
 mod state;
 mod ui;
 mod util;
+mod workbench;
+mod workspace;
+mod ws_commands;
 
 use std::path::PathBuf;
 

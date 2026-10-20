@@ -266,6 +266,8 @@ impl AppState {
     /// Load bookmarks, core plugins, hotkeys and the vault's editor and
     /// appearance settings. Called once when the vault is opened.
     pub fn load_workbench(&mut self) {
+        let app = self.vault.read_config_file("app.json");
+        let appearance = self.vault.read_config_file(APPEARANCE_JSON);
         let v = &*self.vault;
         if let Some(s) = v.read_config_file(BOOKMARKS_JSON) {
             self.ws.bookmarks = Bookmarks::from_json(&s);
@@ -277,8 +279,6 @@ impl AppState {
             crate::hotkeys::apply(&s, &mut self.commands);
         }
         self.apply_plugins();
-        let app = v.read_config_file("app.json");
-        let appearance = v.read_config_file(APPEARANCE_JSON);
         apply_vault_settings(&mut self.settings, app.as_deref(), appearance.as_deref());
     }
 
@@ -525,7 +525,7 @@ impl AppState {
             .filter_map(|p| NotePath::new(p).ok())
             .filter(|p| self.files.contains(p))
             .collect();
-        for p in recent.into_iter().rev() {
+        for p in recent {
             if !self.recent_files.contains(&p) {
                 self.recent_files.push(p);
             }
