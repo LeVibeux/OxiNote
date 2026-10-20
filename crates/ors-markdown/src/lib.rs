@@ -27,8 +27,14 @@
 //! - Inline [`ors_core::Tag::span`]s include the `#`; frontmatter tag spans
 //!   cover the tag text in the YAML (without `#`).
 //! - Frontmatter link spans cover the `[[...]]` text (without YAML quotes).
+//!
+//! # Properties
+//!
+//! [`properties`] edits the frontmatter in a source-preserving way (set /
+//! remove / rename properties, add / remove / rename tags and aliases).
 
 mod frontmatter;
+pub mod properties;
 mod render;
 mod rewrite;
 mod scan;

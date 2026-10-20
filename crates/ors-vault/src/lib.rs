@@ -14,6 +14,8 @@
 //!   [`DailyNotesConfig`], [`TemplatesConfig`]);
 //! * Moment.js-compatible date formatting ([`format_moment`]) and template
 //!   expansion ([`expand_template`]);
+//! * property types from `.obsidian/types.json` ([`PropertyType`],
+//!   [`Vault::property_types`], [`Vault::set_property_type`]);
 //! * daily notes ([`Vault::open_daily_note`]);
 //! * a debounced filesystem watcher ([`Vault::watch`]).
 
@@ -25,6 +27,7 @@ mod fsutil;
 mod moment;
 mod naming;
 mod ops;
+mod types;
 mod watch;
 
 use std::path::{Path, PathBuf};
@@ -35,6 +38,7 @@ use serde::{Deserialize, Serialize};
 pub use daily::daily_note_path;
 pub use moment::{expand_template, format_moment};
 pub use naming::{FORBIDDEN_NAME_CHARS, is_valid_file_name, sanitize_file_name};
+pub use types::{BUILTIN_PROPERTY_TYPES, PropertyType, parse_date, parse_datetime};
 pub use watch::VaultWatcher;
 
 /// Default Moment.js format for `{{date}}` and daily note names.

@@ -12,9 +12,14 @@
 //! - [`fuzzy_find`] powers the quick switcher.
 //! - [`rename_with_links`] / [`rename_folder_with_links`] move files and
 //!   rewrite the links pointing to them.
+//! - Properties and tags: [`MetadataCache::properties`],
+//!   [`MetadataCache::property_values`], [`MetadataCache::tag_suggestions`],
+//!   [`MetadataCache::tag_tree`]; note edits that keep the cache in sync
+//!   ([`set_property_in`], [`rename_tag`], [`rename_property_everywhere`], ...).
 
 mod cache;
 mod fuzzy;
+mod properties;
 mod refactor;
 mod resolve;
 pub mod search;
@@ -24,6 +29,10 @@ use ors_core::{Link, NotePath};
 
 pub use cache::{CacheStats, MetadataCache};
 pub use fuzzy::{FuzzyOptions, fuzzy_find, fuzzy_find_with, fuzzy_score};
+pub use properties::{
+    PropertyInfo, TagNode, add_tag_in, edit_note, plan_tag_rename, remove_property_in,
+    remove_tag_in, rename_property_everywhere, rename_tag, set_property_in, set_property_in_with,
+};
 pub use refactor::{
     LinkEdit, RenamePlan, plan_rename, rename_folder_with_links, rename_with_links,
 };
