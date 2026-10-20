@@ -425,7 +425,11 @@ pub fn reading_view(
                 .color(pal.strong),
         );
         ui.add_space(4.0);
-        if !prepared.frontmatter.is_empty() {
+        if crate::properties_model::panel_visible(&state.settings) {
+            super::properties_view::panel(ui, state, path, "doc", true, actions);
+        } else if !crate::properties_model::frontmatter_hidden(&state.settings)
+            && !prepared.frontmatter.is_empty()
+        {
             properties(ui, &prepared.frontmatter, &pal, size);
         }
         let cx = Ctx {

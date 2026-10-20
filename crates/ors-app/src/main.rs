@@ -8,13 +8,14 @@
 //! capture screenshots headlessly): `--demo`, `--screenshot FILE`,
 //! `--frames N`, `--size WxH`, `--open NOTE` (repeatable), `--reading`,
 //! `--graph`, `--palette`, `--switcher QUERY`, `--search QUERY`,
-//! `--theme dark|light`, `--left files|search|tags`,
-//! `--right backlinks|outgoing|outline`, `--fresh`, `--renderer glow|wgpu`.
+//! `--theme dark|light`, `--left files|search|tags|properties`,
+//! `--right backlinks|outgoing|outline|properties`, `--fresh`, `--renderer glow|wgpu`.
 
 mod backend;
 mod commands;
 mod fake;
 mod highlight;
+mod properties_model;
 mod reading;
 mod settings;
 mod state;
@@ -73,6 +74,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
                 s.left = Some(match value(&mut it, &a)?.as_str() {
                     "search" => LeftPane::Search,
                     "tags" => LeftPane::Tags,
+                    "properties" => LeftPane::Properties,
                     _ => LeftPane::Files,
                 });
             }
@@ -80,6 +82,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
                 s.right = Some(match value(&mut it, &a)?.as_str() {
                     "outgoing" => RightPane::Outgoing,
                     "outline" => RightPane::Outline,
+                    "properties" => RightPane::FileProperties,
                     _ => RightPane::Backlinks,
                 });
             }

@@ -166,3 +166,183 @@ fn all_panes_render() {
     frames(&mut app, &ctx, 1);
     assert!(app.state.is_none());
 }
+
+// ---------------------------------------------------------------------------
+// Properties and tags (on a temporary copy of the sample vault)
+// ---------------------------------------------------------------------------
+
+struct TempVault(std::path::PathBuf);
+
+impl Drop for TempVault {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn copy_dir(from: &std::path::Path, to: &std::path::Path) {
+    std::fs::create_dir_all(to).expect("mkdir");
+    for e in std::fs::read_dir(from).expect("read_dir").flatten() {
+        let target = to.join(e.file_name());
+        if e.path().is_dir() {
+            copy_dir(&e.path(), &target);
+        } else {
+            std::fs::copy(e.path(), &target).expect("copy");
+        }
+    }
+}
+
+fn real_app(tag: &str) -> (ObsiApp, TempVault) {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/sample-vault");
+    let dir = std::env::temp_dir().join(format!("ors-app-props-{}-{tag}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    copy_dir(&src, &dir);
+    let mut app = app();
+    let settings = Settings {
+        autosave_delay: 60.0,
+        ..Settings::default()
+    };
+    let vault = DiskVault::open(&dir).expect("open vault");
+    app.state = Some(AppState::new(Box::new(vault), real_index, settings));
+    (app, TempVault(dir))
+}
+
+fn click(ctx: &egui::Context, app: &mut ObsiApp, id: egui::Id) {
+    let rect = ctx.read_response(id).expect("widget drawn").rect;
+    let pos = rect.center();
+    let button = |pressed| Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    frame(app, ctx, vec![Event::PointerMoved(pos)]);
+    frame(app, ctx, vec![button(true)]);
+    frame(app, ctx, vec![button(false)]);
+    frames(app, ctx, 2);
+}
+
+fn prop_id(path: &str, key: &str, what: &str) -> egui::Id {
+    egui::Id::unique(("prop", "doc", path, key, what))
+}
+
+#[test]
+fn properties_panel_adds_a_property_with_the_command() {
+    let (mut app, _dir) = real_app("add");
+    let ctx = egui::Context::default();
+    let path = NotePath::new("Idées.md").expect("path");
+    state(&mut app).open(&path, OpenIn::CurrentTab);
+    frames(&mut app, &ctx, 3);
+    frame(
+        &mut app,
+        &ctx,
+        vec![key(Key::Semicolon, Modifiers::COMMAND)],
+    );
+    frames(&mut app, &ctx, 3);
+    assert!(!state(&mut app).add_property_requested, "flag consumed");
+    frame(&mut app, &ctx, vec![Event::Text("rating".into())]);
+    frame(&mut app, &ctx, vec![key(Key::Enter, Modifiers::NONE)]);
+    frames(&mut app, &ctx, 3);
+    let text = state(&mut app).buffers[&path].text.clone();
+    assert!(text.contains("\nrating:"), "{text}");
+    assert!(text.contains("status: brouillon"), "other properties kept");
+    assert!(state(&mut app).index.properties().contains_key("rating"));
+}
+
+#[test]
+fn properties_panel_edits_a_text_value() {
+    let (mut app, _dir) = real_app("edit");
+    let ctx = egui::Context::default();
+    let path = NotePath::new("Idées.md").expect("path");
+    state(&mut app).open(&path, OpenIn::CurrentTab);
+    frames(&mut app, &ctx, 3);
+    ctx.memory_mut(|m| m.request_focus(prop_id("Idées.md", "status", "text")));
+    frames(&mut app, &ctx, 2);
+    frame(&mut app, &ctx, vec![key(Key::A, Modifiers::COMMAND)]);
+    frame(&mut app, &ctx, vec![Event::Text("terminé".into())]);
+    frame(&mut app, &ctx, vec![key(Key::Enter, Modifiers::NONE)]);
+    frames(&mut app, &ctx, 3);
+    let text = state(&mut app).buffers[&path].text.clone();
+    assert!(text.contains("status: terminé"), "{text}");
+    assert!(state(&mut app).buffers[&path].is_dirty());
+    state(&mut app).settings.autosave_delay = 0.0;
+    frames(&mut app, &ctx, 3);
+    let disk = state(&mut app).vault.read_to_string(&path).expect("read");
+    assert!(disk.contains("status: terminé"), "{disk}");
+}
+
+#[test]
+fn properties_panel_removes_a_tag_pill() {
+    let (mut app, _dir) = real_app("pill");
+    let ctx = egui::Context::default();
+    let path = NotePath::new("Idées.md").expect("path");
+    state(&mut app).open(&path, OpenIn::CurrentTab);
+    frames(&mut app, &ctx, 3);
+    let x = prop_id("Idées.md", "tags", "pill0").with("x");
+    click(&ctx, &mut app, x);
+    let text = state(&mut app).buffers[&path].text.clone();
+    assert!(!text.contains("- idée"), "{text}");
+    assert!(text.contains("projet/obsirust"), "{text}");
+}
+
+#[test]
+fn properties_views_render_in_all_modes() {
+    let (mut app, _dir) = real_app("modes");
+    let ctx = egui::Context::default();
+    let path = NotePath::new("Idées.md").expect("path");
+    state(&mut app).open(&path, OpenIn::CurrentTab);
+    for left in [LeftPane::Properties, LeftPane::Tags] {
+        state(&mut app).settings.left_pane = left;
+        state(&mut app).settings.right_pane = RightPane::FileProperties;
+        frames(&mut app, &ctx, 2);
+    }
+    state(&mut app).toggle_mode();
+    frames(&mut app, &ctx, 2);
+    for mode in [
+        crate::settings::PropertiesInDocument::Hidden,
+        crate::settings::PropertiesInDocument::Source,
+    ] {
+        state(&mut app).settings.properties_in_document = mode;
+        frames(&mut app, &ctx, 2);
+    }
+    let bad = NotePath::new("Orpheline.md").expect("path");
+    state(&mut app)
+        .vault
+        .write(&bad, "---\na: [unclosed\n---\nbody\n")
+        .expect("write");
+    state(&mut app).settings.properties_in_document =
+        crate::settings::PropertiesInDocument::Visible;
+    state(&mut app).open(&bad, OpenIn::CurrentTab);
+    frames(&mut app, &ctx, 3);
+}
+
+#[test]
+fn renaming_a_tag_from_the_dialog_updates_notes_and_buffers() {
+    let (mut app, _dir) = real_app("tagrename");
+    let ctx = egui::Context::default();
+    let idees = NotePath::new("Idées.md").expect("path");
+    state(&mut app).open(&idees, OpenIn::CurrentTab);
+    state(&mut app).settings.left_pane = LeftPane::Tags;
+    frames(&mut app, &ctx, 3);
+    let users = state(&mut app).index.files_with_tag("idée");
+    assert!(!users.is_empty());
+    state(&mut app).modal = Some(Modal::Props(
+        crate::properties_model::PropsModal::RenameTag {
+            old: "idée".into(),
+            new: "idée".into(),
+        },
+    ));
+    frames(&mut app, &ctx, 3);
+    frame(&mut app, &ctx, vec![key(Key::A, Modifiers::COMMAND)]);
+    frame(&mut app, &ctx, vec![Event::Text("pensée".into())]);
+    frames(&mut app, &ctx, 2);
+    frame(&mut app, &ctx, vec![key(Key::Enter, Modifiers::NONE)]);
+    frames(&mut app, &ctx, 3);
+    assert!(state(&mut app).modal.is_none());
+    let s = state(&mut app);
+    assert!(s.index.files_with_tag("idée").is_empty());
+    assert_eq!(s.index.files_with_tag("pensée").len(), users.len());
+    let disk = s.vault.read_to_string(&idees).expect("read");
+    assert!(disk.contains("pensée"), "{disk}");
+    assert!(s.buffers[&idees].text.contains("pensée"));
+    assert!(!s.buffers[&idees].is_dirty(), "clean buffer reloaded");
+}

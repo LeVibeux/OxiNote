@@ -17,8 +17,11 @@ use ors_core::{
     VaultEvent, VaultRead, VaultWrite,
 };
 use ors_graph::{ForceLayout, ForceParams, Vec2};
-use ors_index::{Backlink, GraphOptions, MetadataCache, ResolvedLink, SearchIndex, SearchResult};
-use ors_vault::{AppConfig, Date, Vault, VaultWatcher};
+use ors_index::{
+    Backlink, GraphOptions, MetadataCache, PropertyInfo, ResolvedLink, SearchIndex, SearchResult,
+    TagNode,
+};
+use ors_vault::{AppConfig, Date, PropertyType, Vault, VaultWatcher};
 
 // ---------------------------------------------------------------------------
 // Vault
@@ -43,6 +46,10 @@ pub trait VaultBackend: VaultWrite {
     fn start_watching(&mut self) -> Result<()>;
     /// Drain pending external change events.
     fn poll_events(&mut self) -> Vec<VaultEvent>;
+    /// Property types (`.obsidian/types.json` plus the built-in ones).
+    fn property_types(&self) -> BTreeMap<String, PropertyType>;
+    /// Assign a type to a property.
+    fn set_property_type(&self, key: &str, ty: PropertyType) -> Result<()>;
 }
 
 /// The on-disk vault from `ors-vault`, plus its watcher.
@@ -129,6 +136,12 @@ impl VaultBackend for DiskVault {
             None => Vec::new(),
         }
     }
+    fn property_types(&self) -> BTreeMap<String, PropertyType> {
+        self.vault.property_types().unwrap_or_default()
+    }
+    fn set_property_type(&self, key: &str, ty: PropertyType) -> Result<()> {
+        self.vault.set_property_type(key, ty)
+    }
 }
 
 /// In-memory vault (tests and `--demo`). Text files live in a
@@ -141,6 +154,7 @@ pub struct MemVault {
     binary: RwLock<BTreeMap<NotePath, Vec<u8>>>,
     folders: RwLock<BTreeSet<String>>,
     pending: RwLock<Vec<VaultEvent>>,
+    types: RwLock<BTreeMap<String, PropertyType>>,
     /// Config returned by [`VaultBackend::app_config`].
     pub config: AppConfig,
 }
@@ -331,6 +345,23 @@ impl VaultBackend for MemVault {
             .map(|mut p| std::mem::take(&mut *p))
             .unwrap_or_default()
     }
+    fn property_types(&self) -> BTreeMap<String, PropertyType> {
+        let mut out = self.types.read().map(|t| t.clone()).unwrap_or_default();
+        for (k, t) in ors_vault::BUILTIN_PROPERTY_TYPES {
+            out.retain(|key, _| !key.eq_ignore_ascii_case(k));
+            out.insert(k.to_string(), t);
+        }
+        out
+    }
+    fn set_property_type(&self, key: &str, ty: PropertyType) -> Result<()> {
+        if key.trim().is_empty() {
+            return Err(Error::Other("empty property name".into()));
+        }
+        let mut types = self.types.write().map_err(|_| Self::lock_err())?;
+        types.retain(|k, _| !k.eq_ignore_ascii_case(key));
+        types.insert(key.to_string(), ty);
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -345,6 +376,18 @@ pub trait IndexBackend: LinkResolver {
     fn unlinked_mentions(&self, vault: &dyn VaultRead, path: &NotePath) -> Vec<NotePath>;
     fn outgoing(&self, path: &NotePath) -> Vec<ResolvedLink>;
     fn tags(&self) -> BTreeMap<String, usize>;
+    /// Every property key of the vault (lowercased key -> info).
+    fn properties(&self) -> BTreeMap<String, PropertyInfo>;
+    /// Distinct values of a property with their note counts.
+    fn property_values(&self, key: &str) -> BTreeMap<String, usize>;
+    /// Notes having a property (case-insensitive key).
+    fn files_with_property(&self, key: &str) -> Vec<NotePath>;
+    /// Tag hierarchy with counts.
+    fn tag_tree(&self) -> Vec<TagNode>;
+    /// Tag autocomplete: `(name, count)`, best first.
+    fn tag_suggestions(&self, prefix: &str, limit: usize) -> Vec<(String, usize)>;
+    /// Notes having a tag or one of its nested children.
+    fn files_with_tag(&self, tag: &str) -> Vec<NotePath>;
     fn graph(&self, options: &GraphOptions) -> GraphData;
     fn link_text_for(&self, target: &NotePath, from: &NotePath) -> String;
     /// File created/modified on disk.
@@ -425,6 +468,24 @@ impl IndexBackend for RealIndex {
     }
     fn tags(&self) -> BTreeMap<String, usize> {
         self.cache.tags()
+    }
+    fn properties(&self) -> BTreeMap<String, PropertyInfo> {
+        self.cache.properties()
+    }
+    fn property_values(&self, key: &str) -> BTreeMap<String, usize> {
+        self.cache.property_values(key)
+    }
+    fn files_with_property(&self, key: &str) -> Vec<NotePath> {
+        self.cache.files_with_property(key, None)
+    }
+    fn tag_tree(&self) -> Vec<TagNode> {
+        self.cache.tag_tree()
+    }
+    fn tag_suggestions(&self, prefix: &str, limit: usize) -> Vec<(String, usize)> {
+        self.cache.tag_suggestions(prefix, limit)
+    }
+    fn files_with_tag(&self, tag: &str) -> Vec<NotePath> {
+        self.cache.files_with_tag(tag)
     }
     fn graph(&self, options: &GraphOptions) -> GraphData {
         self.cache.graph(options)
