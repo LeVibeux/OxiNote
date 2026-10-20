@@ -286,6 +286,8 @@ pub struct AppState {
     pub switch_vault_requested: bool,
     /// Focus the search field on next frame.
     pub focus_search: bool,
+    /// Editor-specific state (pending editing commands, modes).
+    pub editor: crate::editor::EditorState,
 }
 
 impl AppState {
@@ -319,6 +321,7 @@ impl AppState {
             next_tab_id: 1,
             switch_vault_requested: false,
             focus_search: false,
+            editor: crate::editor::EditorState::default(),
             vault: {
                 if let Err(e) = vault.start_watching() {
                     eprintln!("file watcher unavailable: {e}");
@@ -1259,6 +1262,7 @@ impl AppState {
                 self.save_all();
                 self.switch_vault_requested = true;
             }
+            c => self.editor_command(c),
         }
     }
 

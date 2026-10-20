@@ -13,6 +13,7 @@
 
 mod backend;
 mod commands;
+mod editor;
 mod fake;
 mod highlight;
 mod reading;

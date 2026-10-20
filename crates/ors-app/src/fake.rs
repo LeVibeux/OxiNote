@@ -414,6 +414,17 @@ impl IndexBackend for FakeIndex {
         out.truncate(limit);
         out
     }
+    fn fuzzy_find_files(
+        &self,
+        query: &str,
+        limit: usize,
+        include_attachments: bool,
+    ) -> Vec<(NotePath, Option<String>, i64)> {
+        let mut v = self.fuzzy_find(query, usize::MAX);
+        v.retain(|(p, _, _)| include_attachments || p.is_markdown());
+        v.truncate(limit);
+        v
+    }
     fn rename_with_links(
         &mut self,
         vault: &dyn VaultWrite,
