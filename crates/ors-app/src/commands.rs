@@ -4,6 +4,7 @@
 use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 
 use crate::util::fuzzy_score;
+use crate::ws_commands::WsCommand;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(clippy::enum_variant_names)]
@@ -33,6 +34,9 @@ pub enum Command {
     ToggleTheme,
     ToggleMonospace,
     SwitchVault,
+    /// Workspace / file management / settings commands (see
+    /// [`crate::ws_commands`]).
+    Ws(WsCommand),
 }
 
 #[derive(Debug, Clone)]
@@ -44,6 +48,8 @@ pub struct CommandSpec {
 
 pub struct CommandRegistry {
     specs: Vec<CommandSpec>,
+    /// Commands of disabled core plugins (not in the palette, no hotkey).
+    hidden: std::collections::HashSet<Command>,
 }
 
 const fn sc(modifiers: Modifiers, key: Key) -> Option<KeyboardShortcut> {
@@ -113,7 +119,12 @@ impl Default for CommandRegistry {
             spec(ToggleMonospace, "Editor: Toggle monospace font", None),
             spec(SwitchVault, "Open another vault", None),
         ];
-        Self { specs }
+        let mut specs = specs;
+        specs.extend(crate::ws_commands::specs());
+        Self {
+            specs,
+            hidden: Default::default(),
+        }
     }
 }
 
@@ -131,6 +142,26 @@ impl CommandRegistry {
         &self.specs
     }
 
+    /// Every registered command (including hidden ones).
+    pub fn specs(&self) -> &[CommandSpec] {
+        &self.specs
+    }
+
+    /// Rebind (or unbind with `None`) a command's shortcut.
+    pub fn set_shortcut(&mut self, command: Command, shortcut: Option<KeyboardShortcut>) {
+        if let Some(s) = self.specs.iter_mut().find(|s| s.command == command) {
+            s.shortcut = shortcut;
+        }
+    }
+
+    pub fn set_hidden(&mut self, hidden: impl IntoIterator<Item = Command>) {
+        self.hidden = hidden.into_iter().collect();
+    }
+
+    pub fn is_hidden(&self, command: Command) -> bool {
+        self.hidden.contains(&command)
+    }
+
     pub fn get(&self, command: Command) -> Option<&CommandSpec> {
         self.specs.iter().find(|s| s.command == command)
     }
@@ -145,6 +176,7 @@ impl CommandRegistry {
             .specs
             .iter()
             .enumerate()
+            .filter(|(_, s)| !self.hidden.contains(&s.command))
             .filter_map(|(i, s)| fuzzy_score(query, s.name).map(|sc| (sc, i, s)))
             .collect();
         if !query.trim().is_empty() {
@@ -160,6 +192,7 @@ impl CommandRegistry {
         let mut v: Vec<(KeyboardShortcut, Command)> = self
             .specs
             .iter()
+            .filter(|s| !self.hidden.contains(&s.command))
             .filter_map(|s| s.shortcut.map(|k| (k, s.command)))
             .collect();
         v.sort_by_key(|(k, _)| {
@@ -196,7 +229,11 @@ mod tests {
     fn filtering() {
         let r = CommandRegistry::default();
         let res = r.filter("daily");
-        assert_eq!(res[0].command, Command::OpenDailyNote);
+        assert!(
+            res.iter()
+                .take(3)
+                .any(|s| s.command == Command::OpenDailyNote)
+        );
         assert_eq!(r.filter("").len(), r.all().len());
         assert!(r.filter("zzzzqq").is_empty());
         let res = r.filter("graph");

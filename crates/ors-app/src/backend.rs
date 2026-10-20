@@ -18,7 +18,7 @@ use ors_core::{
 };
 use ors_graph::{ForceLayout, ForceParams, Vec2};
 use ors_index::{Backlink, GraphOptions, MetadataCache, ResolvedLink, SearchIndex, SearchResult};
-use ors_vault::{AppConfig, Date, Vault, VaultWatcher};
+use ors_vault::{AppConfig, DailyNotesConfig, Date, TemplatesConfig, Vault, VaultWatcher};
 
 // ---------------------------------------------------------------------------
 // Vault
@@ -43,6 +43,88 @@ pub trait VaultBackend: VaultWrite {
     fn start_watching(&mut self) -> Result<()>;
     /// Drain pending external change events.
     fn poll_events(&mut self) -> Vec<VaultEvent>;
+
+    // ----- `.obsidian/*.json` configuration (workspace, settings) -------
+
+    /// Contents of `.obsidian/<name>`, if it exists.
+    fn read_config_file(&self, name: &str) -> Option<String> {
+        let path = self.root()?.join(ors_vault::CONFIG_DIR).join(name);
+        std::fs::read_to_string(path).ok()
+    }
+    /// Write `.obsidian/<name>` (atomically on disk).
+    fn write_config_file(&self, name: &str, contents: &str) -> Result<()> {
+        let Some(root) = self.root() else {
+            return Ok(());
+        };
+        let dir = root.join(ors_vault::CONFIG_DIR);
+        std::fs::create_dir_all(&dir)?;
+        let tmp = dir.join(format!(".{name}.tmp"));
+        std::fs::write(&tmp, contents)?;
+        std::fs::rename(&tmp, dir.join(name))?;
+        Ok(())
+    }
+    /// Write `.obsidian/app.json`, preserving unknown keys.
+    fn save_app_config(&self, config: &AppConfig) -> Result<()> {
+        let existing = self
+            .read_config_file("app.json")
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+        let map = config.to_json_map_preserving(&existing);
+        let json = serde_json::to_string_pretty(&map).map_err(|e| Error::Other(e.to_string()))?;
+        self.write_config_file("app.json", &json)
+    }
+    fn daily_notes_config(&self) -> Result<DailyNotesConfig> {
+        Ok(self
+            .read_config_file("daily-notes.json")
+            .map(|s| DailyNotesConfig::from_json_str(&s))
+            .unwrap_or_default())
+    }
+    fn save_daily_notes_config(&self, config: &DailyNotesConfig) -> Result<()> {
+        let existing = self
+            .read_config_file("daily-notes.json")
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+        let json = serde_json::to_string_pretty(&config.to_json_map(&existing))
+            .map_err(|e| Error::Other(e.to_string()))?;
+        self.write_config_file("daily-notes.json", &json)
+    }
+    fn templates_config(&self) -> Result<TemplatesConfig> {
+        Ok(self
+            .read_config_file("templates.json")
+            .map(|s| TemplatesConfig::from_json_str(&s))
+            .unwrap_or_default())
+    }
+    fn save_templates_config(&self, config: &TemplatesConfig) -> Result<()> {
+        let existing = self
+            .read_config_file("templates.json")
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+        let json = serde_json::to_string_pretty(&config.to_json_map(&existing))
+            .map_err(|e| Error::Other(e.to_string()))?;
+        self.write_config_file("templates.json", &json)
+    }
+    /// Template notes from the configured templates folder.
+    fn list_templates(&self) -> Result<Vec<NotePath>> {
+        let Some(folder) = self.templates_config()?.folder else {
+            return Ok(Vec::new());
+        };
+        let prefix = format!("{}/", folder.trim_matches('/'));
+        Ok(self
+            .list_files()?
+            .into_iter()
+            .filter(|f| f.is_markdown() && f.as_str().starts_with(&prefix))
+            .collect())
+    }
+    /// Expand template `template` for a note titled `title`, now.
+    fn render_template(&self, template: &NotePath, title: &str) -> Result<String> {
+        let raw = self.read_to_string(template)?;
+        let config = self.templates_config()?;
+        Ok(ors_vault::expand_template(
+            &raw,
+            &ors_vault::TemplateContext::now(title),
+            &config,
+        ))
+    }
 }
 
 /// The on-disk vault from `ors-vault`, plus its watcher.
@@ -129,6 +211,27 @@ impl VaultBackend for DiskVault {
             None => Vec::new(),
         }
     }
+    fn save_app_config(&self, config: &AppConfig) -> Result<()> {
+        self.vault.save_app_config(config)
+    }
+    fn daily_notes_config(&self) -> Result<DailyNotesConfig> {
+        self.vault.daily_notes_config()
+    }
+    fn save_daily_notes_config(&self, config: &DailyNotesConfig) -> Result<()> {
+        self.vault.save_daily_notes_config(config)
+    }
+    fn templates_config(&self) -> Result<TemplatesConfig> {
+        self.vault.templates_config()
+    }
+    fn save_templates_config(&self, config: &TemplatesConfig) -> Result<()> {
+        self.vault.save_templates_config(config)
+    }
+    fn list_templates(&self) -> Result<Vec<NotePath>> {
+        self.vault.list_templates()
+    }
+    fn render_template(&self, template: &NotePath, title: &str) -> Result<String> {
+        self.vault.render_template(template, title)
+    }
 }
 
 /// In-memory vault (tests and `--demo`). Text files live in a
@@ -141,6 +244,8 @@ pub struct MemVault {
     binary: RwLock<BTreeMap<NotePath, Vec<u8>>>,
     folders: RwLock<BTreeSet<String>>,
     pending: RwLock<Vec<VaultEvent>>,
+    /// In-memory `.obsidian/*.json` files.
+    config_files: RwLock<BTreeMap<String, String>>,
     /// Config returned by [`VaultBackend::app_config`].
     pub config: AppConfig,
 }
@@ -310,7 +415,27 @@ impl VaultBackend for MemVault {
         Ok(())
     }
     fn app_config(&self) -> Result<AppConfig> {
-        Ok(self.config.clone())
+        Ok(match self.read_config_file("app.json") {
+            Some(s) => AppConfig::from_json_str(&s),
+            None => self.config.clone(),
+        })
+    }
+    fn read_config_file(&self, name: &str) -> Option<String> {
+        self.config_files.read().ok()?.get(name).cloned()
+    }
+    fn daily_notes_config(&self) -> Result<DailyNotesConfig> {
+        // Matches the fixed layout of [`MemVault::open_daily_note`].
+        Ok(DailyNotesConfig {
+            folder: "Journal".into(),
+            ..DailyNotesConfig::default()
+        })
+    }
+    fn write_config_file(&self, name: &str, contents: &str) -> Result<()> {
+        self.config_files
+            .write()
+            .map_err(|_| Self::lock_err())?
+            .insert(name.to_string(), contents.to_string());
+        Ok(())
     }
     fn open_daily_note(&self, date: Date) -> Result<NotePath> {
         let path = NotePath::new(format!(

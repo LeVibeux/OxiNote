@@ -19,6 +19,7 @@ pub enum LeftPane {
     Files,
     Search,
     Tags,
+    Bookmarks,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -42,6 +43,23 @@ pub struct Settings {
     pub readable_line_length: bool,
     /// Autosave delay after the last keystroke, in seconds.
     pub autosave_delay: f64,
+    // ----- workspace / appearance (settings window) ---------------------
+    /// Custom accent colour (RGB); `None` = Obsidian purple.
+    pub accent: Option<[u8; 3]>,
+    /// Size of the interface (sidebars, tabs, menus) text.
+    pub ui_font_size: f32,
+    /// Proportional font: "Inter" (bundled) or "Default" (egui's).
+    pub text_font: String,
+    /// New tabs open in reading view ("defaultViewMode": "preview").
+    pub default_reading_view: bool,
+    /// Default editing mode: Live Preview (`true`) or Source mode.
+    pub live_preview: bool,
+    pub show_line_numbers: bool,
+    pub spellcheck: bool,
+    pub left_width: f32,
+    pub right_width: f32,
+    /// Show the ribbon (left icon bar).
+    pub show_ribbon: bool,
 }
 
 impl Default for Settings {
@@ -56,6 +74,16 @@ impl Default for Settings {
             right_pane: RightPane::Backlinks,
             readable_line_length: true,
             autosave_delay: 1.0,
+            accent: None,
+            ui_font_size: 13.5,
+            text_font: "Inter".into(),
+            default_reading_view: false,
+            live_preview: true,
+            show_line_numbers: false,
+            spellcheck: false,
+            left_width: 260.0,
+            right_width: 280.0,
+            show_ribbon: true,
         }
     }
 }
