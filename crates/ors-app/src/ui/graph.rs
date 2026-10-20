@@ -430,7 +430,7 @@ fn settings_panel(
     rect: egui::Rect,
     pal: &Palette,
 ) {
-    let id = ui.id().with(("graph-settings", tab.local));
+    let id = ui.make_persistent_id(("graph-settings", tab.local));
     let mut animate = false;
     egui::Area::new(id)
         .order(egui::Order::Middle)

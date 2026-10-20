@@ -4,6 +4,7 @@
 
 mod editor;
 mod graph;
+mod reading_view;
 mod modals;
 mod panes;
 #[cfg(test)]
@@ -89,7 +90,7 @@ fn apply(state: &mut AppState, action: Action) {
 pub struct UiCaches {
     images: HashMap<NotePath, Option<egui::load::Bytes>>,
     highlight: HashMap<TabId, (u64, LayoutJob)>,
-    reading: HashMap<NotePath, editor::Rendered>,
+    reading: HashMap<NotePath, reading_view::Rendered>,
     completion: Option<editor::Completion>,
     tree: panes::FolderNode,
     tree_key: Option<(usize, usize, u64)>,
@@ -588,7 +589,7 @@ fn central(
                     if !path.is_markdown() {
                         editor::file_view(ui, state, caches, &path);
                     } else if mode == ViewMode::Reading {
-                        editor::reading_view(ui, state, caches, &path, actions);
+                        reading_view::reading_view(ui, state, caches, &path, actions);
                     } else {
                         editor::source_view(ui, state, caches, tab_id, &path, actions);
                     }
