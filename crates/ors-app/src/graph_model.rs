@@ -248,6 +248,7 @@ impl GraphStore {
         }
     }
 
+    #[cfg(test)]
     pub fn in_memory(settings: GraphSettings) -> Self {
         Self {
             file: None,
@@ -501,14 +502,10 @@ pub struct GraphTab {
     pub degrees: Vec<usize>,
     pub pan: (f32, f32),
     pub zoom: f32,
-    /// Zoom the view is animating towards, with the screen point kept fixed.
-    pub zoom_target: Option<(f32, (f32, f32))>,
     pub dragging: Option<usize>,
     pub energy: f32,
     /// The view was fitted to the graph bounds once.
     pub fitted: bool,
-    /// "Animate": (start time, nodes in reveal order).
-    pub animation: Option<(f64, Vec<usize>)>,
     applied_params: Option<ForceParams>,
     /// Settings as last exchanged with the store (see [`GraphTab::sync_store`]).
     synced: Option<GraphSettings>,
@@ -535,11 +532,9 @@ impl GraphTab {
             degrees: Vec::new(),
             pan: (0.0, 0.0),
             zoom: 1.0,
-            zoom_target: None,
             dragging: None,
             energy: 1.0,
             fitted: false,
-            animation: None,
             applied_params: None,
             synced: None,
         }
@@ -682,7 +677,12 @@ mod tests {
     fn node(id: &str, kind: GraphNodeKind) -> GraphNode {
         GraphNode {
             id: id.into(),
-            label: id.rsplit('/').next().unwrap_or(id).trim_end_matches(".md").into(),
+            label: id
+                .rsplit('/')
+                .next()
+                .unwrap_or(id)
+                .trim_end_matches(".md")
+                .into(),
             kind,
             path: match kind {
                 GraphNodeKind::Note | GraphNodeKind::Attachment => Some(NotePath::new(id).unwrap()),
@@ -827,19 +827,12 @@ mod tests {
         assert_eq!(v["custom"], 42);
         assert_eq!(v["showArrow"], true);
         // Local store keeps its local keys.
-        let mut local = GraphStore::load(
-            Some(&dir),
-            LOCAL_GRAPH_FILE,
-            GraphSettings::local_default(),
-        );
+        let mut local =
+            GraphStore::load(Some(&dir), LOCAL_GRAPH_FILE, GraphSettings::local_default());
         assert_eq!(local.settings.depth(), 1);
         local.settings.local_jumps = Some(3);
         assert_eq!(local.save_if_needed(0.0, 0.0), Ok(true));
-        let again = GraphStore::load(
-            Some(&dir),
-            LOCAL_GRAPH_FILE,
-            GraphSettings::local_default(),
-        );
+        let again = GraphStore::load(Some(&dir), LOCAL_GRAPH_FILE, GraphSettings::local_default());
         assert_eq!(again.settings.depth(), 3);
         let _ = std::fs::remove_dir_all(dir);
     }

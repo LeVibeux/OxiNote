@@ -13,8 +13,8 @@ use super::editor::{is_image, readable_column};
 use super::theme::Palette;
 use super::{Action, UiCaches};
 use crate::reading::{
-    Block, EmbedPlan, Inline, InlineKind, LinkRef, Prepared, callout_family, callout_icon,
-    embed_plan, parse_blocks, prepare, ref_index,
+    Block, EmbedKey, EmbedPlan, Inline, InlineKind, LinkRef, Prepared, callout_family,
+    callout_icon, embed_plan, parse_blocks, prepare, ref_index,
 };
 use crate::state::{AppState, OpenIn};
 
@@ -65,7 +65,7 @@ pub struct Ctx<'a> {
     pal: Palette,
     size: f32,
     /// Notes being drawn, outermost first (`path` is the last one).
-    chain: Vec<NotePath>,
+    chain: Vec<EmbedKey>,
     /// Only the note itself is interactive (tasks, scroll tracking), not
     /// its transclusions and previews.
     interactive: bool,
@@ -80,7 +80,7 @@ pub struct Ctx<'a> {
 }
 
 impl<'a> Ctx<'a> {
-    fn child(&self, path: &'a NotePath, prepared: &'a Prepared, chain: Vec<NotePath>) -> Self {
+    fn child(&self, path: &'a NotePath, prepared: &'a Prepared, chain: Vec<EmbedKey>) -> Self {
         Ctx {
             state: self.state,
             path,
@@ -164,7 +164,7 @@ pub fn reading_view(
             prepared: &prepared,
             pal,
             size,
-            chain: vec![path.clone()],
+            chain: vec![(path.clone(), None)],
             interactive: true,
             heading_n: Cell::new(0),
             task_n: Cell::new(0),
@@ -363,12 +363,13 @@ fn draw_block(
                         pal.muted
                     };
                     let mark = ui.add(
-                        egui::Label::new(RichText::new(marker).size(cx.size).color(color))
-                            .sense(if item.task.is_some() && cx.interactive {
+                        egui::Label::new(RichText::new(marker).size(cx.size).color(color)).sense(
+                            if item.task.is_some() && cx.interactive {
                                 Sense::click()
                             } else {
                                 Sense::hover()
-                            }),
+                            },
+                        ),
                     );
                     if item.task.is_some() {
                         let t = cx.task_n.get();
@@ -531,7 +532,8 @@ fn draw_inline(
                     )
                     .on_hover_cursor(egui::CursorIcon::PointingHand);
                 // Ctrl held: preview of the note; otherwise a plain tooltip.
-                let preview = ui.input(|i| i.modifiers.command)
+                let preview = ui
+                    .input(|i| i.modifiers.command)
                     .then_some(resolved.as_ref())
                     .flatten()
                     .filter(|p| p.is_markdown());
@@ -626,7 +628,7 @@ fn link_preview(
     let prepared = prepare(&text, &parsed, path, &*cx.state.index);
     let blocks = parse_blocks(&prepared.markdown);
     let mut chain = cx.chain.clone();
-    chain.push(path.clone());
+    chain.push((path.clone(), subpath.cloned()));
     let inner = cx.child(path, &prepared, chain);
     ui.label(RichText::new(path.stem()).strong().color(cx.pal.accent));
     ui.separator();
@@ -747,7 +749,7 @@ fn draw_embed(
             if r.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
                 actions.push(Action::Open(path.clone(), OpenIn::CurrentTab));
             }
-            match embed_plan(&cx.chain, path) {
+            match embed_plan(&cx.chain, path, subpath.as_ref()) {
                 EmbedPlan::Render => {}
                 EmbedPlan::Cycle => {
                     ui.label(RichText::new("↻ circular embed").color(pal.faint));
@@ -770,7 +772,7 @@ fn draw_embed(
             let prepared = prepare(&text, &parsed, path, &*cx.state.index);
             let blocks = parse_blocks(&prepared.markdown);
             let mut chain = cx.chain.clone();
-            chain.push(path.clone());
+            chain.push((path.clone(), subpath.clone()));
             let inner = cx.child(path, &prepared, chain);
             draw_blocks(ui, &inner, caches, &blocks, actions);
         });
@@ -815,4 +817,3 @@ fn section_of(state: &AppState, path: &NotePath, text: &str, subpath: Option<&Su
             .unwrap_or_else(|| text.to_string()),
     }
 }
-

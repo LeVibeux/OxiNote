@@ -36,33 +36,10 @@ pub struct Prepared {
     pub markdown: String,
     pub refs: Vec<LinkRef>,
     pub frontmatter: Vec<(String, String)>,
-    /// (offset in `markdown`, offset in the source, copied verbatim?) at
-    /// every edit boundary, to map rendered blocks back to source lines.
-    anchors: Vec<(usize, usize, bool)>,
-    /// Start offsets of the source lines.
-    line_starts: Vec<usize>,
     /// Source line of every heading / task, in document order (the n-th
     /// heading or task block drawn is the n-th entry).
     pub heading_lines: Vec<usize>,
     pub task_lines: Vec<usize>,
-}
-
-impl Prepared {
-    /// Source byte offset of a byte offset in [`Prepared::markdown`].
-    pub fn source_offset(&self, md: usize) -> usize {
-        let i = self.anchors.partition_point(|a| a.0 <= md);
-        match i.checked_sub(1).and_then(|i| self.anchors.get(i)) {
-            Some(&(out, src, true)) => src + (md - out),
-            Some(&(_, src, false)) => src,
-            None => md,
-        }
-    }
-
-    /// 0-based source line of a byte offset in [`Prepared::markdown`].
-    pub fn source_line(&self, md: usize) -> usize {
-        let off = self.source_offset(md);
-        self.line_starts.partition_point(|s| *s <= off).saturating_sub(1)
-    }
 }
 
 fn escape_md(text: &str) -> String {
@@ -202,7 +179,6 @@ pub fn prepare(
 
     let mut out = String::with_capacity(source.len());
     let mut pos = 0;
-    let mut anchors = Vec::new();
     for (start, end, rep) in edits {
         if start < pos
             || end > source.len()
@@ -211,19 +187,12 @@ pub fn prepare(
         {
             continue; // overlapping (e.g. link inside a comment) or invalid
         }
-        anchors.push((out.len(), pos, true));
         out.push_str(&source[pos..start]);
-        anchors.push((out.len(), start, false));
         out.push_str(&rep);
         pos = end;
     }
-    anchors.push((out.len(), pos, true));
     out.push_str(&source[pos..]);
     prepared.markdown = out;
-    prepared.anchors = anchors;
-    prepared.line_starts = std::iter::once(0)
-        .chain(source.match_indices('\n').map(|(i, _)| i + 1))
-        .collect();
     prepared
 }
 
@@ -721,8 +690,12 @@ pub enum EmbedPlan {
     TooDeep,
 }
 
-pub fn embed_plan(chain: &[NotePath], target: &NotePath) -> EmbedPlan {
-    if chain.contains(target) {
+/// One level of the transclusion chain: the note and the part of it drawn
+/// (`None`: the whole note).
+pub type EmbedKey = (NotePath, Option<Subpath>);
+
+pub fn embed_plan(chain: &[EmbedKey], target: &NotePath, sub: Option<&Subpath>) -> EmbedPlan {
+    if chain.iter().any(|(p, s)| p == target && s.as_ref() == sub) {
         EmbedPlan::Cycle
     } else if chain.len() > MAX_EMBED_DEPTH {
         EmbedPlan::TooDeep
@@ -837,20 +810,36 @@ mod tests {
     #[test]
     fn embed_plan_guards_cycles_and_depth() {
         let p = |n: &str| NotePath::new(n).unwrap();
-        assert_eq!(embed_plan(&[p("a.md")], &p("b.md")), EmbedPlan::Render);
-        assert_eq!(embed_plan(&[p("a.md")], &p("a.md")), EmbedPlan::Cycle);
+        let blk = Subpath::Block("x".into());
+        let whole = |n: &str| (p(n), None);
         assert_eq!(
-            embed_plan(&[p("a.md"), p("b.md")], &p("a.md")),
+            embed_plan(&[whole("a.md")], &p("b.md"), None),
+            EmbedPlan::Render
+        );
+        assert_eq!(
+            embed_plan(&[whole("a.md")], &p("a.md"), None),
             EmbedPlan::Cycle
         );
-        let deep = [p("a.md"), p("b.md"), p("c.md"), p("d.md")];
-        assert_eq!(embed_plan(&deep[..3], &p("e.md")), EmbedPlan::Render);
-        assert_eq!(embed_plan(&deep, &p("e.md")), EmbedPlan::TooDeep);
+        assert_eq!(
+            embed_plan(&[whole("a.md"), whole("b.md")], &p("a.md"), None),
+            EmbedPlan::Cycle
+        );
+        // A block of the note being drawn is fine, but not twice.
+        assert_eq!(
+            embed_plan(&[whole("a.md")], &p("a.md"), Some(&blk)),
+            EmbedPlan::Render
+        );
+        let chain = [whole("a.md"), (p("a.md"), Some(blk.clone()))];
+        assert_eq!(embed_plan(&chain, &p("a.md"), Some(&blk)), EmbedPlan::Cycle);
+        let deep = [whole("a.md"), whole("b.md"), whole("c.md"), whole("d.md")];
+        assert_eq!(embed_plan(&deep[..3], &p("e.md"), None), EmbedPlan::Render);
+        assert_eq!(embed_plan(&deep, &p("e.md"), None), EmbedPlan::TooDeep);
     }
 
     #[test]
     fn callout_fold_markers_and_families() {
-        let b = parse_blocks("> [!warning]- Careful
+        let b = parse_blocks(
+            "> [!warning]- Careful
 > body
 
 > [!note]+ Open
@@ -858,7 +847,8 @@ mod tests {
 
 > [!tip] Plain
 > y
-");
+",
+        );
         let folds: Vec<Option<bool>> = b
             .iter()
             .filter_map(|b| match b {
@@ -881,7 +871,12 @@ mod tests {
 
 ## U
 ";
-        let p = prepare(src, &ors_markdown::parse(src), &NotePath::new("a.md").unwrap(), &NoResolver);
+        let p = prepare(
+            src,
+            &ors_markdown::parse(src),
+            &NotePath::new("a.md").unwrap(),
+            &NoResolver,
+        );
         assert_eq!(p.heading_lines, vec![0, 5]);
         assert_eq!(p.task_lines, vec![2, 3]);
     }

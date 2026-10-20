@@ -12,7 +12,7 @@ use ors_index::{Operator, Query, SearchResult};
 
 use crate::graph_model::{GRAPH_FILE, GraphSettings, GraphStore, GraphTab, LOCAL_GRAPH_FILE};
 use crate::highlight::highlight;
-use crate::state::{AppState, OpenIn, Tab, ViewMode};
+use crate::state::{AppState, OpenIn, Tab};
 
 /// Sort orders of the search and backlinks panes (Obsidian's menu).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -194,8 +194,6 @@ pub struct BacklinkOptions {
     pub show_filter: bool,
     /// The "Unlinked mentions" section is expanded (computed lazily).
     pub show_unlinked: bool,
-    /// "Backlinks in document" (reading view footer).
-    pub in_document: bool,
 }
 
 /// One line (or paragraph with "show more context") shown under a result.
@@ -351,7 +349,12 @@ pub fn find_mentions(source: &str, parsed: &ParsedNote, needles: &[String]) -> V
     let in_excluded = |s: usize, e: usize| excluded.iter().any(|&(a, b)| s < b && e > a);
     let firsts: Vec<Vec<char>> = needles
         .iter()
-        .map(|n| n.chars().next().map(|c| c.to_lowercase().collect()).unwrap_or_default())
+        .map(|n| {
+            n.chars()
+                .next()
+                .map(|c| c.to_lowercase().collect())
+                .unwrap_or_default()
+        })
         .collect();
     let mut out = Vec::new();
     let mut prev: Option<char> = None;
@@ -371,7 +374,10 @@ pub fn find_mentions(source: &str, parsed: &ParsedNote, needles: &[String]) -> V
                 continue;
             };
             let end = i + len;
-            let after_ok = source[end..].chars().next().is_none_or(|a| !is_word_char(a));
+            let after_ok = source[end..]
+                .chars()
+                .next()
+                .is_none_or(|a| !is_word_char(a));
             if !after_ok || in_excluded(i, end) {
                 continue;
             }
@@ -522,7 +528,10 @@ pub fn outline_matches(node: &OutlineNode, texts: &[&str], filter: &str) -> bool
     texts
         .get(node.index)
         .is_some_and(|t| t.to_lowercase().contains(filter))
-        || node.children.iter().any(|c| outline_matches(c, texts, filter))
+        || node
+            .children
+            .iter()
+            .any(|c| outline_matches(c, texts, filter))
 }
 
 /// Cached results of a pane, recomputed when the key changes.
@@ -569,18 +578,10 @@ pub struct ViewsState {
     /// Show the frontmatter table at the top of the reading view (until the
     /// Properties panel exists).
     pub show_properties_table: bool,
-    backlink_config: Option<std::path::PathBuf>,
 }
 
 impl ViewsState {
     pub fn new(root: Option<&Path>) -> Self {
-        let backlink_config = root.map(|r| r.join(".obsidian").join("backlink.json"));
-        let in_document = backlink_config
-            .as_ref()
-            .and_then(|f| std::fs::read_to_string(f).ok())
-            .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
-            .and_then(|v| v.get("backlinkInDocument").and_then(|b| b.as_bool()))
-            .unwrap_or(false);
         Self {
             graph: GraphStore::load(root, GRAPH_FILE, GraphSettings::default()),
             local_graph: GraphStore::load(root, LOCAL_GRAPH_FILE, GraphSettings::local_default()),
@@ -589,7 +590,6 @@ impl ViewsState {
             search_edited: None,
             backlinks: BacklinkOptions {
                 show_unlinked: true,
-                in_document,
                 ..BacklinkOptions::default()
             },
             linked: Cached::default(),
@@ -599,27 +599,7 @@ impl ViewsState {
             sorted: Cached::default(),
             current_line: None,
             show_properties_table: true,
-            backlink_config,
         }
-    }
-
-    /// Persist "Backlinks in document" in `.obsidian/backlink.json` like
-    /// Obsidian (other keys are kept).
-    pub fn set_backlinks_in_document(&mut self, on: bool) -> Result<(), String> {
-        self.backlinks.in_document = on;
-        let Some(file) = &self.backlink_config else {
-            return Ok(());
-        };
-        let mut obj = std::fs::read_to_string(file)
-            .ok()
-            .and_then(|t| serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(&t).ok())
-            .unwrap_or_default();
-        obj.insert("backlinkInDocument".into(), serde_json::Value::Bool(on));
-        if let Some(dir) = file.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-        }
-        let text = serde_json::to_string_pretty(&obj).map_err(|e| e.to_string())?;
-        std::fs::write(file, text).map_err(|e| e.to_string())
     }
 }
 
@@ -708,7 +688,9 @@ pub fn outgoing_mentions(state: &AppState, path: &NotePath) -> Vec<(Mention, Not
         }
         for name in note_names(state, &f) {
             let lower = name.to_lowercase();
-            let first = lower.split(|c: char| !is_word_char(c)).find(|w| !w.is_empty());
+            let first = lower
+                .split(|c: char| !is_word_char(c))
+                .find(|w| !w.is_empty());
             if lower.chars().count() < 2 || !first.is_some_and(|w| words.contains(w)) {
                 continue;
             }
@@ -769,11 +751,8 @@ pub enum ViewAction {
         path: NotePath,
         line: usize,
     },
-    OpenExternally(NotePath),
     /// The reading view scrolled: line of the current heading.
     SetCurrentLine(NotePath, usize),
-    /// Show the search pane with this query.
-    Search(String),
 }
 
 pub fn apply(state: &mut AppState, action: ViewAction) {
@@ -798,12 +777,7 @@ pub fn apply(state: &mut AppState, action: ViewAction) {
                 state.error("Cannot toggle this task");
             }
         }
-        ViewAction::OpenExternally(path) => open_externally(state, &path),
         ViewAction::SetCurrentLine(path, line) => state.views.current_line = Some((path, line)),
-        ViewAction::Search(q) => {
-            state.search_query = q;
-            state.execute(crate::commands::Command::SearchVault);
-        }
     }
 }
 
@@ -862,29 +836,6 @@ pub fn edit_note(
     }
 }
 
-fn open_externally(state: &mut AppState, path: &NotePath) {
-    let Some(root) = state.vault.root() else {
-        state.info("This vault is not on disk");
-        return;
-    };
-    let file = root.join(path.as_str());
-    let program = if cfg!(target_os = "windows") {
-        "explorer"
-    } else if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    if let Err(e) = std::process::Command::new(program).arg(&file).spawn() {
-        state.error(format!("Cannot open {}: {e}", file.display()));
-    }
-}
-
-/// Is the note currently shown in reading mode in the active tab?
-pub fn active_mode(state: &AppState) -> Option<ViewMode> {
-    state.active_tab().and_then(Tab::note).map(|n| n.mode)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -892,7 +843,10 @@ mod tests {
 
     #[test]
     fn terms_debounce_and_outline_tree() {
-        assert_eq!(highlight_terms("Rust and RUST", &["rust"]), vec![(0, 4), (9, 13)]);
+        assert_eq!(
+            highlight_terms("Rust and RUST", &["rust"]),
+            vec![(0, 4), (9, 13)]
+        );
         assert_eq!(highlight_terms("été", &["É"]), vec![(0, 2), (3, 5)]);
         assert!(highlight_terms("abc", &[""]).is_empty());
         assert!(debounce_ready(None, 5.0, 0.3));
@@ -1020,7 +974,10 @@ mod tests {
         let src = "- [ ] a\n- [x] b\n  * [/] c\n> - [ ] quoted\n1. [ ] num\nnot a task [ ]";
         assert_eq!(toggle_task(src, 0).unwrap().lines().next(), Some("- [x] a"));
         assert_eq!(toggle_task(src, 1).unwrap().lines().nth(1), Some("- [ ] b"));
-        assert_eq!(toggle_task(src, 2).unwrap().lines().nth(2), Some("  * [ ] c"));
+        assert_eq!(
+            toggle_task(src, 2).unwrap().lines().nth(2),
+            Some("  * [ ] c")
+        );
         assert_eq!(
             toggle_task(src, 3).unwrap().lines().nth(3),
             Some("> - [x] quoted")
@@ -1066,7 +1023,10 @@ mod tests {
         assert_eq!(s.vault.read_to_string(&b).unwrap(), "I love [[rust]] a lot");
         assert!(s.generation > g0);
         assert_eq!(s.index.backlinks(&rust).len(), 1);
-        assert_eq!(linked_mentions(&s, &rust, false)[0].1[0].text, "I love [[rust]] a lot");
+        assert_eq!(
+            linked_mentions(&s, &rust, false)[0].1[0].text,
+            "I love [[rust]] a lot"
+        );
         assert!(unlinked_mentions(&s, &rust, false).is_empty());
         // Task toggling goes through the open buffer.
         s.open(&rust, OpenIn::CurrentTab);
@@ -1083,7 +1043,9 @@ mod tests {
         s.open(&b, OpenIn::CurrentTab);
         reveal_line(&mut s, &b, 0, OpenIn::CurrentTab);
         assert_eq!(
-            s.active_tab().and_then(Tab::note).and_then(|n| n.pending_line),
+            s.active_tab()
+                .and_then(Tab::note)
+                .and_then(|n| n.pending_line),
             Some(0)
         );
     }

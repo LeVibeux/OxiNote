@@ -5,8 +5,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use eframe::egui::{
-    self, Align, Color32, FontFamily, FontId, Frame, Key, Margin, Modifiers, RichText,
-    Stroke, TextFormat,
+    self, Align, Color32, FontFamily, FontId, Frame, Key, Margin, Modifiers, RichText, Stroke,
+    TextFormat,
     text::{CCursor, CCursorRange, LayoutJob},
 };
 use ors_core::NotePath;

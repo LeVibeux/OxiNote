@@ -4,13 +4,13 @@
 
 mod editor;
 mod graph;
-mod reading_view;
-mod view_panes;
 mod modals;
 mod panes;
+mod reading_view;
 #[cfg(test)]
 mod tests;
 pub mod theme;
+mod view_panes;
 
 use std::collections::HashMap;
 use std::path::PathBuf;

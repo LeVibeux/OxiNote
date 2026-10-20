@@ -146,11 +146,7 @@ pub struct Toast {
 /// Information shown in the right sidebar and status bar for the active note.
 #[derive(Debug, Clone, Default)]
 pub struct NoteInfo {
-    pub path: Option<NotePath>,
-    /// Backlinks grouped by source note: (line, line text) per link.
-    pub backlinks: Vec<(NotePath, Vec<(usize, String)>)>,
     pub backlink_count: usize,
-    pub unlinked: Vec<NotePath>,
     pub outgoing: Vec<ResolvedLink>,
     pub headings: Vec<Heading>,
     pub word_count: usize,
@@ -1012,24 +1008,7 @@ impl AppState {
             return NoteInfo::default();
         };
         let parsed = self.parsed(&path);
-        let backlinks = self.index.backlinks(&path);
-        let backlink_count = backlinks.len();
-        let mut grouped: Vec<(NotePath, Vec<(usize, String)>)> = Vec::new();
-        let mut source_cache: HashMap<NotePath, Option<String>> = HashMap::new();
-        for bl in backlinks {
-            let text = source_cache
-                .entry(bl.source.clone())
-                .or_insert_with(|| self.note_text(&bl.source))
-                .as_deref()
-                .and_then(|t| t.lines().nth(bl.link.line))
-                .unwrap_or("")
-                .trim()
-                .to_string();
-            match grouped.last_mut() {
-                Some((p, v)) if *p == bl.source => v.push((bl.link.line, text)),
-                _ => grouped.push((bl.source.clone(), vec![(bl.link.line, text)])),
-            }
-        }
+        let backlink_count = self.index.backlinks(&path).len();
         let word_count = match self.index.get(&path) {
             Some(n) => n.word_count,
             None => self
@@ -1038,13 +1017,10 @@ impl AppState {
                 .map_or(0, |b| b.text.split_whitespace().count()),
         };
         NoteInfo {
-            unlinked: self.index.unlinked_mentions(self.vault.as_read(), &path),
             outgoing: self.index.outgoing(&path),
             headings: parsed.headings,
-            backlinks: grouped,
             backlink_count,
             word_count,
-            path: Some(path),
         }
     }
 
@@ -1498,8 +1474,6 @@ mod tests {
         s.open(&p("A.md"), OpenIn::CurrentTab);
         let info = s.note_info().clone();
         assert_eq!(info.backlink_count, 1);
-        assert_eq!(info.backlinks[0].0, p("B.md"));
-        assert_eq!(info.backlinks[0].1[0].1, "back to [[A]]");
         assert_eq!(info.outgoing.len(), 2);
         assert_eq!(info.headings.len(), 1);
         s.search_query = "back".into();

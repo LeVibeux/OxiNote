@@ -171,7 +171,7 @@ fn draw_canvas(
             let (min, max) = layout.bounds();
             let w = (max.x - min.x).max(1.0);
             let h = (max.y - min.y).max(1.0);
-            let margin = if env.compact { 40.0 } else { 120.0 };
+            let margin = if env.compact { 90.0 } else { 120.0 };
             tab.zoom = ((rect.width() - margin) / w)
                 .min((rect.height() - margin) / h)
                 .clamp(0.2, 2.5);
@@ -278,7 +278,13 @@ fn draw_canvas(
     // The hovered node and its neighbours stay lit, the others fade.
     let lit = |i: usize| match hovered {
         None => true,
-        Some(h) => i == h || tab.adjacency.get(h).is_some_and(|a| a.binary_search(&i).is_ok()),
+        Some(h) => {
+            i == h
+                || tab
+                    .adjacency
+                    .get(h)
+                    .is_some_and(|a| a.binary_search(&i).is_ok())
+        }
     };
 
     // Edges.
@@ -384,12 +390,7 @@ fn draw_canvas(
 
 /// A collapsible section; the collapsed state is stored in the settings
 /// (`collapse-filter`, ...) like Obsidian.
-fn section(
-    ui: &mut egui::Ui,
-    title: &str,
-    collapsed: &mut bool,
-    body: impl FnOnce(&mut egui::Ui),
-) {
+fn section(ui: &mut egui::Ui, title: &str, collapsed: &mut bool, body: impl FnOnce(&mut egui::Ui)) {
     let arrow = if *collapsed { "⏵" } else { "⏷" };
     if ui
         .add(
@@ -470,8 +471,10 @@ fn settings_panel(
                         return;
                     }
                     ui.separator();
+                    let h = (rect.height() - 70.0).clamp(120.0, 640.0);
                     egui::ScrollArea::vertical()
-                        .max_height((rect.height() - 70.0).max(120.0))
+                        .max_height(h)
+                        .min_scrolled_height(h)
                         .show(ui, |ui| {
                             animate = settings_sections(ui, &mut tab.settings);
                         });
@@ -533,11 +536,7 @@ fn settings_sections(ui: &mut egui::Ui, s: &mut crate::graph_model::GraphSetting
                         .hint_text("tag:#x, path:dir…")
                         .desired_width(110.0),
                 );
-                if ui
-                    .small_button("✕")
-                    .on_hover_text("Delete group")
-                    .clicked()
-                {
+                if ui.small_button("✕").on_hover_text("Delete group").clicked() {
                     remove = Some(i);
                 }
             });

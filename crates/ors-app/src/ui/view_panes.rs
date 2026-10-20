@@ -135,13 +135,15 @@ pub fn search_pane(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Ac
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.label(RichText::new("Search options").strong());
-                egui::Grid::new("search-help").num_columns(2).show(ui, |ui| {
-                    for (op, desc) in SEARCH_OPERATORS {
-                        ui.label(RichText::new(*op).monospace().color(pal.accent));
-                        ui.label(RichText::new(*desc).small().color(pal.muted));
-                        ui.end_row();
-                    }
-                });
+                egui::Grid::new("search-help")
+                    .num_columns(2)
+                    .show(ui, |ui| {
+                        for (op, desc) in SEARCH_OPERATORS {
+                            ui.label(RichText::new(*op).monospace().color(pal.accent));
+                            ui.label(RichText::new(*desc).small().color(pal.muted));
+                            ui.end_row();
+                        }
+                    });
             });
     }
     state.views.search = opts.clone();
@@ -161,7 +163,9 @@ pub fn search_pane(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Ac
 
     let query = views::effective_query(&state.search_query, &opts);
     if let Err(e) = &state.search_results {
-        ui.label(RichText::new(format!("Invalid query: {e}")).color(Color32::from_rgb(0xe9, 0x31, 0x47)));
+        ui.label(
+            RichText::new(format!("Invalid query: {e}")).color(Color32::from_rgb(0xe9, 0x31, 0x47)),
+        );
         return;
     }
     if opts.explain && !state.search_query.trim().is_empty() {
@@ -267,9 +271,12 @@ pub fn search_pane(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Ac
             }
             if results.len() > MAX_FILES {
                 ui.label(
-                    RichText::new(format!("{} more files not shown", results.len() - MAX_FILES))
-                        .small()
-                        .color(pal.faint),
+                    RichText::new(format!(
+                        "{} more files not shown",
+                        results.len() - MAX_FILES
+                    ))
+                    .small()
+                    .color(pal.faint),
                 );
             }
         });
@@ -360,19 +367,31 @@ pub fn backlinks_pane(
     let more = opts.more_context;
     let sort = opts.sort;
     let mut linked = std::mem::take(&mut state.views.linked);
-    refresh(&mut linked, key.clone(), now, |a, b| a.0 == b.0, || {
-        let mut g = views::linked_mentions(state, path, more);
-        views::sort_by_path(&mut g, |x| &x.0, sort, |p| views::file_times(state, p));
-        g
-    });
+    refresh(
+        &mut linked,
+        key.clone(),
+        now,
+        |a, b| a.0 == b.0,
+        || {
+            let mut g = views::linked_mentions(state, path, more);
+            views::sort_by_path(&mut g, |x| &x.0, sort, |p| views::file_times(state, p));
+            g
+        },
+    );
     state.views.linked = linked;
     let mut unlinked = std::mem::take(&mut state.views.unlinked);
     if opts.show_unlinked {
-        refresh(&mut unlinked, key, now, |a, b| a.0 == b.0, || {
-            let mut g = views::unlinked_mentions(state, path, more);
-            views::sort_by_path(&mut g, |x| &x.0, sort, |p| views::file_times(state, p));
-            g
-        });
+        refresh(
+            &mut unlinked,
+            key,
+            now,
+            |a, b| a.0 == b.0,
+            || {
+                let mut g = views::unlinked_mentions(state, path, more);
+                views::sort_by_path(&mut g, |x| &x.0, sort, |p| views::file_times(state, p));
+                g
+            },
+        );
     }
     state.views.unlinked = unlinked;
     state.views.backlinks = opts.clone();
@@ -445,14 +464,18 @@ fn mention_groups(
                 if l.clicked() || l.middle_clicked() {
                     actions.push(Action::Open(src.clone(), open_in(ui, &l)));
                 }
-                ui.label(RichText::new(items.len().to_string()).small().color(pal.faint));
+                ui.label(
+                    RichText::new(items.len().to_string())
+                        .small()
+                        .color(pal.faint),
+                );
             })
             .body(|ui| {
                 for item in items {
                     let job = highlighted(&item.text, &item.ranges, pal, 8);
                     ui.horizontal(|ui| {
-                        let width = ui.available_width()
-                            - if item.mention.is_some() { 46.0 } else { 0.0 };
+                        let width =
+                            ui.available_width() - if item.mention.is_some() { 46.0 } else { 0.0 };
                         let resp = Frame::new()
                             .inner_margin(Margin::symmetric(6, 3))
                             .corner_radius(4)
@@ -503,9 +526,13 @@ pub fn outgoing_pane(
     let info = state.note_info().clone();
     let key = (path.clone(), state.generation);
     let mut cache = std::mem::take(&mut state.views.outgoing_mentions);
-    refresh(&mut cache, key, now, |a, b| a.0 == b.0, || {
-        views::outgoing_mentions(state, path)
-    });
+    refresh(
+        &mut cache,
+        key,
+        now,
+        |a, b| a.0 == b.0,
+        || views::outgoing_mentions(state, path),
+    );
     state.views.outgoing_mentions = cache;
     let mentions = state.views.outgoing_mentions.value.clone();
     egui::ScrollArea::vertical()
@@ -565,7 +592,11 @@ pub fn outgoing_pane(
                             open_in: OpenIn::CurrentTab,
                         }));
                     }
-                    ui.label(RichText::new(format!("→ {}", target.stem())).small().color(pal.faint));
+                    ui.label(
+                        RichText::new(format!("→ {}", target.stem()))
+                            .small()
+                            .color(pal.faint),
+                    );
                     if ui.small_button("Link").clicked() {
                         actions.push(Action::View(ViewAction::LinkMention {
                             source: path.clone(),
@@ -615,7 +646,9 @@ pub fn outline_pane(
         .auto_shrink([false, false])
         .show(ui, |ui| {
             for node in &tree {
-                outline_node(ui, node, &headings, &texts, &filter, current, path, &pal, actions);
+                outline_node(
+                    ui, node, &headings, &texts, &filter, current, path, &pal, actions,
+                );
             }
         });
 }
