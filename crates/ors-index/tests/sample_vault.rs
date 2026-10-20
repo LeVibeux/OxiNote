@@ -1,7 +1,4 @@
 //! Integration tests on `examples/sample-vault` with the real markdown parser.
-//!
-//! Tests that depend on `ors_markdown::parse` / `rewrite_links` are ignored
-//! until that crate is implemented; the others only rely on raw text.
 
 #![allow(clippy::unwrap_used)]
 
@@ -139,7 +136,6 @@ fn quick_switcher_on_sample() {
 // ------------------------------------------------------------ needs the parser
 
 #[test]
-#[ignore = "needs ors-markdown implementation"]
 fn backlinks_of_accueil() {
     let cache = MetadataCache::build(&sample()).unwrap();
     // Idées: frontmatter `related: "[[Accueil]]"` and the callout link.
@@ -156,7 +152,6 @@ fn backlinks_of_accueil() {
 }
 
 #[test]
-#[ignore = "needs ors-markdown implementation"]
 fn resolution_on_sample() {
     let cache = MetadataCache::build(&sample()).unwrap();
     let targets = |from: &str| -> Vec<Option<String>> {
@@ -212,7 +207,6 @@ fn resolution_on_sample() {
 }
 
 #[test]
-#[ignore = "needs ors-markdown implementation"]
 fn unresolved_on_sample() {
     let cache = MetadataCache::build(&sample()).unwrap();
     let u = cache.unresolved();
@@ -223,7 +217,6 @@ fn unresolved_on_sample() {
 }
 
 #[test]
-#[ignore = "needs ors-markdown implementation"]
 fn tags_on_sample() {
     let cache = MetadataCache::build(&sample()).unwrap();
     let tags = cache.tags();
@@ -258,7 +251,6 @@ fn tags_on_sample() {
 }
 
 #[test]
-#[ignore = "needs ors-markdown implementation"]
 fn orphans_mentions_and_graph_on_sample() {
     let vault = sample();
     let cache = MetadataCache::build(&vault).unwrap();
@@ -310,7 +302,6 @@ fn orphans_mentions_and_graph_on_sample() {
 }
 
 #[test]
-#[ignore = "needs ors-markdown implementation"]
 fn tag_search_on_sample() {
     let vault = sample();
     let cache = MetadataCache::build(&vault).unwrap();
@@ -336,7 +327,6 @@ fn read(vault: &MemoryVault, path: &str) -> String {
 }
 
 #[test]
-#[ignore = "needs ors-markdown implementation"]
 fn rename_note_updates_links() {
     let vault = sample();
     let mut cache = MetadataCache::build(&vault).unwrap();
@@ -368,7 +358,6 @@ fn rename_note_updates_links() {
 }
 
 #[test]
-#[ignore = "needs ors-markdown implementation"]
 fn rename_with_spaces_updates_markdown_and_wiki_links() {
     let vault = sample();
     let mut cache = MetadataCache::build(&vault).unwrap();
@@ -396,7 +385,6 @@ fn rename_with_spaces_updates_markdown_and_wiki_links() {
 }
 
 #[test]
-#[ignore = "needs ors-markdown implementation"]
 fn move_note_keeps_style() {
     let vault = sample();
     let mut cache = MetadataCache::build(&vault).unwrap();

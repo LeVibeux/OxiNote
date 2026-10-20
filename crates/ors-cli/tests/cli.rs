@@ -1,6 +1,5 @@
 //! End-to-end tests of the `obsirust` binary on `examples/sample-vault`.
 //!
-//! Tests marked `#[ignore = "needs upstream crates"]` need the real
 //! ors-markdown / ors-vault / ors-index implementations; the others only
 //! exercise the CLI layer.
 
@@ -171,7 +170,6 @@ fn stats_json_is_well_formed() {
 // ------------------------------------------------------------ full behaviour
 
 #[test]
-#[ignore = "needs upstream crates"]
 fn stats_counts_sample_vault() {
     let v: serde_json::Value =
         serde_json::from_str(&run_ok(&["stats", &vault_arg(), "--json"])).unwrap();
@@ -193,7 +191,6 @@ fn stats_counts_sample_vault() {
 }
 
 #[test]
-#[ignore = "needs upstream crates"]
 fn search_with_tag_and_phrase() {
     let out = run_ok(&["search", &vault_arg(), "tag:#projet \"rust\""]);
     assert!(out.contains("Projets/ObsiRust.md"), "{out}");
@@ -221,7 +218,6 @@ fn search_with_tag_and_phrase() {
 }
 
 #[test]
-#[ignore = "needs upstream crates"]
 fn backlinks_by_name_and_path() {
     let out = run_ok(&["backlinks", &vault_arg(), "Rust notes"]);
     assert!(
@@ -247,7 +243,6 @@ fn backlinks_by_name_and_path() {
 }
 
 #[test]
-#[ignore = "needs upstream crates"]
 fn outgoing_links_with_resolution() {
     let out = run_ok(&["links", &vault_arg(), "Accueil"]);
     assert!(
@@ -269,7 +264,6 @@ fn outgoing_links_with_resolution() {
 }
 
 #[test]
-#[ignore = "needs upstream crates"]
 fn unresolved_and_orphans() {
     let out = run_ok(&["unresolved", &vault_arg()]);
     assert_eq!(out, "Canvas ← Idées.md\nNote fantôme ← Accueil.md\n");
@@ -278,7 +272,6 @@ fn unresolved_and_orphans() {
 }
 
 #[test]
-#[ignore = "needs upstream crates"]
 fn tags_flat_and_tree() {
     let out = run_ok(&["tags", &vault_arg()]);
     for tag in [
@@ -299,7 +292,6 @@ fn tags_flat_and_tree() {
 }
 
 #[test]
-#[ignore = "needs upstream crates"]
 fn fuzzy_find_names_and_aliases() {
     let out = run_ok(&["find", &vault_arg(), "rust no"]);
     assert_eq!(out.lines().next(), Some("Projets/Rust notes.md"), "{out}");
@@ -308,7 +300,6 @@ fn fuzzy_find_names_and_aliases() {
 }
 
 #[test]
-#[ignore = "needs upstream crates"]
 fn graph_json_and_local_graph() {
     let v: serde_json::Value = serde_json::from_str(&run_ok(&["graph", &vault_arg()])).unwrap();
     let nodes = v["nodes"].as_array().unwrap();
@@ -352,7 +343,6 @@ fn graph_json_and_local_graph() {
 }
 
 #[test]
-#[ignore = "needs upstream crates"]
 fn rename_updates_links() {
     let vault = vault_copy("rename");
     let v = vault.to_str().unwrap();
@@ -386,7 +376,6 @@ fn rename_updates_links() {
 }
 
 #[test]
-#[ignore = "needs upstream crates"]
 fn daily_note_is_created_from_template() {
     let vault = vault_copy("daily");
     let v = vault.to_str().unwrap();
@@ -409,7 +398,6 @@ fn daily_note_is_created_from_template() {
 }
 
 #[test]
-#[ignore = "needs upstream crates"]
 fn export_static_site() {
     let dir = temp_dir("export");
     let out = dir.join("site");
