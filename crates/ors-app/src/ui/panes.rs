@@ -455,10 +455,13 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
         if pane_tab(ui, cur == RightPane::Outline, "☰", "Outline") {
             state.settings.right_pane = RightPane::Outline;
         }
+        if pane_tab(ui, cur == RightPane::LocalGraph, "⎔", "Local graph") {
+            state.settings.right_pane = RightPane::LocalGraph;
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui
-                .small_button("⎔")
-                .on_hover_text("Open local graph")
+                .small_button("↗")
+                .on_hover_text("Open local graph in a tab")
                 .clicked()
             {
                 actions.push(Action::Exec(Command::OpenLocalGraph));
@@ -467,6 +470,10 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
     });
     ui.separator();
     let pane = state.settings.right_pane;
+    if pane == RightPane::LocalGraph {
+        super::graph::local_graph_pane(ui, state, actions);
+        return;
+    }
     let info = state.note_info().clone();
     let Some(path) = info.path.clone() else {
         ui.label(RichText::new("No file is open.").color(pal.muted));
@@ -574,6 +581,7 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
                     }
                 }
             }
+            RightPane::LocalGraph => {}
             RightPane::Outline => {
                 if info.headings.is_empty() {
                     ui.label(RichText::new("No headings.").color(pal.faint));

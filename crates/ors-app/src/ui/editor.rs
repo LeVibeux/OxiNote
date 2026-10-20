@@ -814,6 +814,7 @@ fn draw_embed(
         target,
         subpath,
         resolved,
+        ..
     }) = ref_index(url).and_then(|i| cx.prepared.refs.get(i))
     else {
         // External image: not fetched (no network access from the app).

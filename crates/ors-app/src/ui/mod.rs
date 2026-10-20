@@ -48,10 +48,15 @@ pub enum Action {
     Resolve(NotePath, bool),
     Edited(NotePath),
     ShowBacklinks,
+    /// Requests of the graph / search / backlinks / outline / reading views.
+    View(crate::views::ViewAction),
+    Error(String),
 }
 
 fn apply(state: &mut AppState, action: Action) {
     match action {
+        Action::View(a) => crate::views::apply(state, a),
+        Action::Error(e) => state.error(e),
         Action::Open(p, how) => state.open(&p, how),
         Action::OpenLine(p, line, how) => state.open_at_line(&p, line, how),
         Action::Follow {

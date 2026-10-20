@@ -503,6 +503,8 @@ pub struct GraphTab {
     /// "Animate": (start time, nodes in reveal order).
     pub animation: Option<(f64, Vec<usize>)>,
     applied_params: Option<ForceParams>,
+    /// Settings as last exchanged with the store (see [`GraphTab::sync_store`]).
+    synced: Option<GraphSettings>,
 }
 
 impl GraphTab {
@@ -532,7 +534,22 @@ impl GraphTab {
             fitted: false,
             animation: None,
             applied_params: None,
+            synced: None,
         }
+    }
+
+    /// Keep the tab's settings and the persisted ones (`graph.json`) in
+    /// step: local edits are pushed to the store, changes made elsewhere
+    /// (another graph view) are pulled.
+    pub fn sync_store(&mut self, store: &mut GraphStore) {
+        match &self.synced {
+            None => self.settings = store.settings.clone(),
+            Some(s) if *s != self.settings => store.settings = self.settings.clone(),
+            Some(s) if *s != store.settings => self.settings = store.settings.clone(),
+            Some(_) => return,
+        }
+        self.settings_loaded = true;
+        self.synced = Some(self.settings.clone());
     }
 
     fn key(&self, generation: u64) -> String {
@@ -935,5 +952,21 @@ mod tests {
         let f = apply_search_filter(&g, "ghost", &search);
         assert_eq!(f.nodes.len(), 1);
         assert_eq!(apply_search_filter(&g, " ", &search).nodes.len(), 7);
+    }
+
+    #[test]
+    fn tabs_sync_settings_through_the_store() {
+        let mut store = GraphStore::in_memory(GraphSettings::default());
+        store.settings.show_tags = true;
+        let mut a = GraphTab::new(None);
+        let mut b = GraphTab::new(None);
+        a.sync_store(&mut store);
+        b.sync_store(&mut store);
+        assert!(a.settings.show_tags && b.settings.show_tags);
+        a.settings.repel_strength = 3.0;
+        a.sync_store(&mut store);
+        assert_eq!(store.settings.repel_strength, 3.0);
+        b.sync_store(&mut store);
+        assert_eq!(b.settings.repel_strength, 3.0);
     }
 }

@@ -462,11 +462,21 @@ pub fn toggle_task(source: &str, line: usize) -> Option<String> {
 }
 
 /// Cached results of a pane, recomputed when the key changes.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct Cached<K, V> {
     pub key: Option<K>,
     pub value: V,
     pub time: f64,
+}
+
+impl<K, V: Default> Default for Cached<K, V> {
+    fn default() -> Self {
+        Self {
+            key: None,
+            value: V::default(),
+            time: 0.0,
+        }
+    }
 }
 
 /// Groups of context items per source note.

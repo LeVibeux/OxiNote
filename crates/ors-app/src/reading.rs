@@ -219,7 +219,482 @@ pub fn prepare(
     prepared
 }
 
-//PARSE//
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct InlineStyle {
+    pub bold: bool,
+    pub italic: bool,
+    pub strike: bool,
+    pub code: bool,
+    pub highlight: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InlineKind {
+    Text,
+    /// Link destination (`ors:N` for internal ones).
+    Link(String),
+    Image {
+        url: String,
+    },
+    LineBreak,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Inline {
+    pub text: String,
+    pub style: InlineStyle,
+    pub kind: InlineKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Item {
+    pub task: Option<bool>,
+    pub blocks: Vec<Block>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Block {
+    Heading {
+        level: u8,
+        inlines: Vec<Inline>,
+    },
+    Paragraph(Vec<Inline>),
+    Code {
+        lang: String,
+        text: String,
+    },
+    Quote(Vec<Block>),
+    Callout {
+        kind: String,
+        title: String,
+        blocks: Vec<Block>,
+    },
+    List {
+        start: Option<u64>,
+        items: Vec<Item>,
+    },
+    Table {
+        header: Vec<Vec<Inline>>,
+        rows: Vec<Vec<Vec<Inline>>>,
+    },
+    Rule,
+}
+
+/// Parse prepared markdown into blocks.
+pub fn parse_blocks(markdown: &str) -> Vec<Block> {
+    let opts = Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
+    let events: Vec<Event<'_>> = Parser::new_ext(markdown, opts).collect();
+    let mut pos = 0;
+    blocks_until(&events, &mut pos, None)
+}
+
+/// Is `e` the end event closing a block started by `start`?
+fn closes(e: &Event<'_>, end: Option<TagEnd>) -> bool {
+    matches!((e, end), (Event::End(t), Some(want)) if *t == want)
+}
+
+fn blocks_until(events: &[Event<'_>], pos: &mut usize, end: Option<TagEnd>) -> Vec<Block> {
+    let mut blocks = Vec::new();
+    let mut loose: Vec<Inline> = Vec::new();
+    while *pos < events.len() {
+        let e = &events[*pos];
+        if closes(e, end) {
+            *pos += 1;
+            break;
+        }
+        match e {
+            Event::Start(Tag::Paragraph) => {
+                flush_loose(&mut loose, &mut blocks);
+                *pos += 1;
+                let inl = inlines_until(events, pos, TagEnd::Paragraph);
+                blocks.push(Block::Paragraph(inl));
+            }
+            Event::Start(Tag::Heading { level, .. }) => {
+                flush_loose(&mut loose, &mut blocks);
+                let lvl = *level as u8;
+                let tag_end = TagEnd::Heading(*level);
+                *pos += 1;
+                let inlines = inlines_until(events, pos, tag_end);
+                blocks.push(Block::Heading {
+                    level: lvl,
+                    inlines,
+                });
+            }
+            Event::Start(Tag::CodeBlock(kind)) => {
+                flush_loose(&mut loose, &mut blocks);
+                let lang = match kind {
+                    CodeBlockKind::Fenced(l) => l.to_string(),
+                    CodeBlockKind::Indented => String::new(),
+                };
+                *pos += 1;
+                let mut text = String::new();
+                while *pos < events.len() {
+                    match &events[*pos] {
+                        Event::End(TagEnd::CodeBlock) => {
+                            *pos += 1;
+                            break;
+                        }
+                        Event::Text(t) => text.push_str(t),
+                        _ => {}
+                    }
+                    *pos += 1;
+                }
+                if text.ends_with('\n') {
+                    text.pop();
+                }
+                blocks.push(Block::Code { lang, text });
+            }
+            Event::Start(Tag::BlockQuote(_)) => {
+                flush_loose(&mut loose, &mut blocks);
+                *pos += 1;
+                let inner = blocks_until(events, pos, Some(TagEnd::BlockQuote(None)));
+                blocks.push(to_callout(inner));
+            }
+            Event::Start(Tag::List(start)) => {
+                flush_loose(&mut loose, &mut blocks);
+                let start = *start;
+                let ordered = start.is_some();
+                *pos += 1;
+                let mut items = Vec::new();
+                while *pos < events.len() {
+                    match &events[*pos] {
+                        Event::End(TagEnd::List(o)) if *o == ordered => {
+                            *pos += 1;
+                            break;
+                        }
+                        Event::Start(Tag::Item) => {
+                            *pos += 1;
+                            let mut task = None;
+                            if let Some(Event::TaskListMarker(done)) = events.get(*pos) {
+                                task = Some(*done);
+                                *pos += 1;
+                            }
+                            let blocks = blocks_until(events, pos, Some(TagEnd::Item));
+                            items.push(Item { task, blocks });
+                        }
+                        _ => *pos += 1,
+                    }
+                }
+                blocks.push(Block::List { start, items });
+            }
+            Event::Start(Tag::Table(_)) => {
+                flush_loose(&mut loose, &mut blocks);
+                *pos += 1;
+                blocks.push(table(events, pos));
+            }
+            Event::Rule => {
+                flush_loose(&mut loose, &mut blocks);
+                blocks.push(Block::Rule);
+                *pos += 1;
+            }
+            Event::Start(Tag::HtmlBlock) | Event::Start(Tag::MetadataBlock(_)) => {
+                skip_tag(events, pos);
+            }
+            Event::Start(_)
+            | Event::Text(_)
+            | Event::Code(_)
+            | Event::SoftBreak
+            | Event::HardBreak
+            | Event::InlineHtml(_)
+            | Event::Html(_) => {
+                // Inline content directly inside a tight list item.
+                let mut style = Vec::new();
+                inline_event(events, pos, &mut loose, &mut style);
+            }
+            _ => *pos += 1,
+        }
+    }
+    flush_loose(&mut loose, &mut blocks);
+    blocks
+}
+
+fn flush_loose(loose: &mut Vec<Inline>, blocks: &mut Vec<Block>) {
+    if !loose.is_empty() {
+        blocks.push(Block::Paragraph(apply_highlights(merge_text(
+            std::mem::take(loose),
+        ))));
+    }
+}
+
+fn skip_tag(events: &[Event<'_>], pos: &mut usize) {
+    let mut depth = 0usize;
+    while *pos < events.len() {
+        match &events[*pos] {
+            Event::Start(_) => depth += 1,
+            Event::End(_) => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    *pos += 1;
+                    return;
+                }
+            }
+            _ => {}
+        }
+        *pos += 1;
+    }
+}
+
+fn table(events: &[Event<'_>], pos: &mut usize) -> Block {
+    let mut header = Vec::new();
+    let mut rows: Vec<Vec<Vec<Inline>>> = Vec::new();
+    let mut in_head = false;
+    while *pos < events.len() {
+        match &events[*pos] {
+            Event::End(TagEnd::Table) => {
+                *pos += 1;
+                break;
+            }
+            Event::Start(Tag::TableHead) => {
+                in_head = true;
+                *pos += 1;
+            }
+            Event::End(TagEnd::TableHead) => {
+                in_head = false;
+                *pos += 1;
+            }
+            Event::Start(Tag::TableRow) => {
+                rows.push(Vec::new());
+                *pos += 1;
+            }
+            Event::Start(Tag::TableCell) => {
+                *pos += 1;
+                let cell = inlines_until(events, pos, TagEnd::TableCell);
+                if in_head {
+                    header.push(cell);
+                } else if let Some(r) = rows.last_mut() {
+                    r.push(cell);
+                }
+            }
+            _ => *pos += 1,
+        }
+    }
+    Block::Table { header, rows }
+}
+
+#[derive(Clone, Copy)]
+enum StyleOp {
+    Bold,
+    Italic,
+    Strike,
+}
+
+fn current_style(stack: &[StyleOp], highlight: bool) -> InlineStyle {
+    let mut s = InlineStyle {
+        highlight,
+        ..InlineStyle::default()
+    };
+    for op in stack {
+        match op {
+            StyleOp::Bold => s.bold = true,
+            StyleOp::Italic => s.italic = true,
+            StyleOp::Strike => s.strike = true,
+        }
+    }
+    s
+}
+
+fn inlines_until(events: &[Event<'_>], pos: &mut usize, end: TagEnd) -> Vec<Inline> {
+    let mut out = Vec::new();
+    let mut stack = Vec::new();
+    while *pos < events.len() {
+        if matches!(&events[*pos], Event::End(t) if *t == end) {
+            *pos += 1;
+            break;
+        }
+        inline_event(events, pos, &mut out, &mut stack);
+    }
+    apply_highlights(merge_text(out))
+}
+
+/// Consume one inline event (or a whole link/image) at `pos`.
+fn inline_event(
+    events: &[Event<'_>],
+    pos: &mut usize,
+    out: &mut Vec<Inline>,
+    stack: &mut Vec<StyleOp>,
+) {
+    let style = current_style(stack, false);
+    match &events[*pos] {
+        Event::Text(t) => out.push(Inline {
+            text: t.to_string(),
+            style,
+            kind: InlineKind::Text,
+        }),
+        Event::Code(t) => out.push(Inline {
+            text: t.to_string(),
+            style: InlineStyle {
+                code: true,
+                ..style
+            },
+            kind: InlineKind::Text,
+        }),
+        Event::InlineHtml(t) | Event::Html(t) => out.push(Inline {
+            text: t.to_string(),
+            style,
+            kind: InlineKind::Text,
+        }),
+        // Kept as '\n' so callout titles can be split; drawn as a space.
+        Event::SoftBreak => out.push(Inline {
+            text: "\n".into(),
+            style,
+            kind: InlineKind::Text,
+        }),
+        Event::HardBreak => out.push(Inline {
+            text: String::new(),
+            style,
+            kind: InlineKind::LineBreak,
+        }),
+        Event::Start(Tag::Strong) => stack.push(StyleOp::Bold),
+        Event::Start(Tag::Emphasis) => stack.push(StyleOp::Italic),
+        Event::Start(Tag::Strikethrough) => stack.push(StyleOp::Strike),
+        Event::End(TagEnd::Strong | TagEnd::Emphasis | TagEnd::Strikethrough) => {
+            stack.pop();
+        }
+        Event::Start(Tag::Link { dest_url, .. }) => {
+            let url = dest_url.to_string();
+            *pos += 1;
+            let inner = inlines_until(events, pos, TagEnd::Link);
+            let text: String = inner.iter().map(|i| i.text.as_str()).collect();
+            let s = inner.first().map_or(style, |i| i.style);
+            out.push(Inline {
+                text,
+                style: s,
+                kind: InlineKind::Link(url),
+            });
+            return;
+        }
+        Event::Start(Tag::Image { dest_url, .. }) => {
+            let url = dest_url.to_string();
+            *pos += 1;
+            let inner = inlines_until(events, pos, TagEnd::Image);
+            out.push(Inline {
+                text: inner.iter().map(|i| i.text.as_str()).collect(),
+                style,
+                kind: InlineKind::Image { url },
+            });
+            return;
+        }
+        Event::TaskListMarker(done) => out.push(Inline {
+            text: if *done { "☑ " } else { "☐ " }.into(),
+            style,
+            kind: InlineKind::Text,
+        }),
+        _ => {}
+    }
+    *pos += 1;
+}
+
+fn merge_text(inlines: Vec<Inline>) -> Vec<Inline> {
+    let mut out: Vec<Inline> = Vec::with_capacity(inlines.len());
+    for i in inlines {
+        if let Some(last) = out.last_mut()
+            && last.kind == InlineKind::Text
+            && i.kind == InlineKind::Text
+            && last.style == i.style
+        {
+            last.text.push_str(&i.text);
+            continue;
+        }
+        out.push(i);
+    }
+    out
+}
+
+/// Split text runs on `==` and toggle the highlight style.
+fn apply_highlights(inlines: Vec<Inline>) -> Vec<Inline> {
+    let mut on = false;
+    let mut out = Vec::new();
+    for i in inlines {
+        if i.kind != InlineKind::Text || i.style.code {
+            let mut i = i;
+            i.style.highlight |= on;
+            out.push(i);
+            continue;
+        }
+        for (n, part) in i.text.split("==").enumerate() {
+            if n > 0 {
+                on = !on;
+            }
+            if !part.is_empty() {
+                out.push(Inline {
+                    text: part.to_string(),
+                    style: InlineStyle {
+                        highlight: on,
+                        ..i.style
+                    },
+                    kind: InlineKind::Text,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// `> [!type] Title` blockquotes become callouts.
+fn to_callout(blocks: Vec<Block>) -> Block {
+    let Some(Block::Paragraph(first)) = blocks.first() else {
+        return Block::Quote(blocks);
+    };
+    let Some(Inline {
+        text,
+        kind: InlineKind::Text,
+        ..
+    }) = first.first()
+    else {
+        return Block::Quote(blocks);
+    };
+    let Some(rest) = text.strip_prefix("[!") else {
+        return Block::Quote(blocks);
+    };
+    let Some(close) = rest.find(']') else {
+        return Block::Quote(blocks);
+    };
+    let kind = rest[..close].to_lowercase();
+    let after = rest[close + 1..].trim_start_matches(['-', '+']);
+    // Title runs until the first line break (soft breaks became " ", so
+    // only the first text run is used).
+    let (title, remainder) = match after.find('\n') {
+        Some(n) => (after[..n].trim().to_string(), after[n + 1..].to_string()),
+        None => (after.trim().to_string(), String::new()),
+    };
+    let mut first_rest: Vec<Inline> = Vec::new();
+    if !remainder.is_empty() {
+        first_rest.push(Inline {
+            text: remainder,
+            style: InlineStyle::default(),
+            kind: InlineKind::Text,
+        });
+    }
+    let mut blocks = blocks;
+    let mut para = match blocks.remove(0) {
+        Block::Paragraph(p) => p,
+        _ => Vec::new(),
+    };
+    para.remove(0);
+    first_rest.extend(para);
+    let title = if title.is_empty() {
+        let mut t = kind.clone();
+        if let Some(c) = t.get_mut(0..1) {
+            c.make_ascii_uppercase();
+        }
+        t
+    } else {
+        title
+    };
+    if !first_rest.is_empty() {
+        blocks.insert(0, Block::Paragraph(first_rest));
+    }
+    Block::Callout {
+        kind,
+        title,
+        blocks,
+    }
+}
+
+/// Parse `ors:N` destinations.
+pub fn ref_index(url: &str) -> Option<usize> {
+    url.strip_prefix("ors:").and_then(|n| n.parse().ok())
+}
 #[cfg(test)]
 mod tests {
     use super::*;
