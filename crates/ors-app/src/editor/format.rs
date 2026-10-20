@@ -213,9 +213,16 @@ pub fn is_url(s: &str) -> bool {
     let s = s.trim();
     !s.is_empty()
         && !s.contains(char::is_whitespace)
-        && ["http://", "https://", "ftp://", "mailto:", "file://", "obsidian://"]
-            .iter()
-            .any(|p| s.to_ascii_lowercase().starts_with(p))
+        && [
+            "http://",
+            "https://",
+            "ftp://",
+            "mailto:",
+            "file://",
+            "obsidian://",
+        ]
+        .iter()
+        .any(|p| s.to_ascii_lowercase().starts_with(p))
 }
 
 /// Ctrl+K: insert a markdown link around the selection.
@@ -368,8 +375,7 @@ pub fn outdent_lines(text: &mut String, sel: Sel) -> Option<Sel> {
 /// tab character)?
 pub fn in_list(text: &str, sel: Sel) -> bool {
     let s = line_start(text, sel.start);
-    parse_prefix(&text[s..line_end(text, s)])
-        .is_some_and(|p| !matches!(p.kind, ListKind::Quote))
+    parse_prefix(&text[s..line_end(text, s)]).is_some_and(|p| !matches!(p.kind, ListKind::Quote))
 }
 
 /// Enter: continue a list / task / blockquote, or end it on an empty item.
@@ -576,14 +582,32 @@ mod tests {
 
     #[test]
     fn wrap_and_unwrap() {
-        assert_eq!(run("a |bc| d", |t, s| Some(toggle_wrap(t, s, "**"))), "a **|bc|** d");
-        assert_eq!(run("a **|bc|** d", |t, s| Some(toggle_wrap(t, s, "**"))), "a |bc| d");
-        assert_eq!(run("a |**bc**| d", |t, s| Some(toggle_wrap(t, s, "**"))), "a |bc| d");
+        assert_eq!(
+            run("a |bc| d", |t, s| Some(toggle_wrap(t, s, "**"))),
+            "a **|bc|** d"
+        );
+        assert_eq!(
+            run("a **|bc|** d", |t, s| Some(toggle_wrap(t, s, "**"))),
+            "a |bc| d"
+        );
+        assert_eq!(
+            run("a |**bc**| d", |t, s| Some(toggle_wrap(t, s, "**"))),
+            "a |bc| d"
+        );
         // Caret in a word wraps the word (UTF-8).
-        assert_eq!(run("un mo|té x", |t, s| Some(toggle_wrap(t, s, "*"))), "un *|moté|* x");
+        assert_eq!(
+            run("un mo|té x", |t, s| Some(toggle_wrap(t, s, "*"))),
+            "un *|moté|* x"
+        );
         // Caret on a blank inserts an empty pair, toggling again removes it.
-        assert_eq!(run("a | b", |t, s| Some(toggle_wrap(t, s, "=="))), "a ==|== b");
-        assert_eq!(run("a ==|== b", |t, s| Some(toggle_wrap(t, s, "=="))), "a | b");
+        assert_eq!(
+            run("a | b", |t, s| Some(toggle_wrap(t, s, "=="))),
+            "a ==|== b"
+        );
+        assert_eq!(
+            run("a ==|== b", |t, s| Some(toggle_wrap(t, s, "=="))),
+            "a | b"
+        );
         assert_eq!(run("|", |t, s| Some(toggle_wrap(t, s, "%%"))), "%%|%%");
     }
 
@@ -595,13 +619,22 @@ mod tests {
             run("|https://a.b|", |t, s| Some(insert_link(t, s))),
             "[|](https://a.b)"
         );
-        assert_eq!(run("|Note|", |t, s| Some(insert_wikilink(t, s))), "[[Note|]]");
+        assert_eq!(
+            run("|Note|", |t, s| Some(insert_wikilink(t, s))),
+            "[[Note|]]"
+        );
         assert_eq!(
             run("see |docs|", |t, s| smart_paste(t, s, "https://docs.rs")),
             "see [docs](https://docs.rs)|"
         );
-        assert_eq!(run("see |docs|", |t, s| smart_paste(t, s, "not a url")), "NONE");
-        assert_eq!(run("see |", |t, s| smart_paste(t, s, "https://x.y")), "NONE");
+        assert_eq!(
+            run("see |docs|", |t, s| smart_paste(t, s, "not a url")),
+            "NONE"
+        );
+        assert_eq!(
+            run("see |", |t, s| smart_paste(t, s, "https://x.y")),
+            "NONE"
+        );
     }
 
     #[test]
@@ -649,14 +682,11 @@ mod tests {
             run("|- a\n- b|\nc", |t, s| Some(indent_lines(t, s))),
             "\t|- a\n\t- b|\nc"
         );
-        assert_eq!(run("\t- a|", |t, s| outdent_lines(t, s)), "- a|");
-        assert_eq!(run("    - a|", |t, s| outdent_lines(t, s)), "- a|");
-        assert_eq!(run("- a|", |t, s| outdent_lines(t, s)), "NONE");
+        assert_eq!(run("\t- a|", outdent_lines), "- a|");
+        assert_eq!(run("    - a|", outdent_lines), "- a|");
+        assert_eq!(run("- a|", outdent_lines), "NONE");
         // Selection ending at a line start does not touch that line.
-        assert_eq!(
-            run("|a\n|b", |t, s| Some(indent_lines(t, s))),
-            "\t|a\n|b"
-        );
+        assert_eq!(run("|a\n|b", |t, s| Some(indent_lines(t, s))), "\t|a\n|b");
         assert!(in_list("- x", Sel::caret(3)));
         assert!(!in_list("x", Sel::caret(1)));
     }

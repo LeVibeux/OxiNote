@@ -28,7 +28,10 @@ pub enum LineKind {
     Heading(u8),
     Rule,
     Quote,
-    Callout { kind: String, header: bool },
+    Callout {
+        kind: String,
+        header: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,6 +90,7 @@ pub struct Decor {
 
 impl Decor {
     /// Index of the line containing byte `at`.
+    #[cfg(test)]
     pub fn line_at(&self, at: usize) -> usize {
         self.lines
             .partition_point(|l| l.range.end < at)
@@ -122,11 +126,13 @@ pub fn decorate(text: &str) -> Decor {
     let mut fence: Option<&str> = None;
     let mut callout: Option<String> = None;
     let mut si = 0;
-    for (n, raw) in text.split_inclusive('\n').chain(
-        // A trailing empty line after a final '\n'.
-        text.ends_with('\n').then_some("").into_iter(),
-    )
-    .enumerate()
+    for (n, raw) in text
+        .split_inclusive('\n')
+        .chain(
+            // A trailing empty line after a final '\n'.
+            text.ends_with('\n').then_some(""),
+        )
+        .enumerate()
     {
         let content = raw.trim_end_matches(['\n', '\r']);
         let range = off..off + content.len();
@@ -342,8 +348,7 @@ fn decorate_line(
                 let dest = &rest[close + 2..close + end];
                 let end_b = r.start + close + end + 1;
                 d.conceals.push((r.start..r.start + 1, Conceal::Hide, n));
-                d.conceals
-                    .push((r.start + close..end_b, Conceal::Hide, n));
+                d.conceals.push((r.start + close..end_b, Conceal::Hide, n));
                 d.links.push(LinkSpan {
                     range: r.start..end_b,
                     target: LinkTarget::Markdown(dest.to_string()),

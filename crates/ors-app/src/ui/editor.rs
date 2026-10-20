@@ -6,8 +6,7 @@ use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
 use eframe::egui::{
-    self, Color32, FontFamily, FontId, Frame, Margin, RichText, Sense,
-    Stroke, TextFormat,
+    self, Color32, FontFamily, FontId, Frame, Margin, RichText, Sense, Stroke, TextFormat,
     text::LayoutJob,
 };
 use ors_core::{NotePath, Subpath};
@@ -35,7 +34,7 @@ pub fn readable_column<R>(
 ) -> R {
     let avail = ui.available_width();
     let width = if readable {
-        avail.min(READABLE_WIDTH)
+        (avail - 32.0).min(READABLE_WIDTH)
     } else {
         avail - 32.0
     }

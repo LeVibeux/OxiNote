@@ -158,7 +158,10 @@ impl AppState {
     pub fn editor_command(&mut self, cmd: Command) {
         match cmd {
             Command::ToggleLivePreview => {
-                if let Some(id) = self.active_tab().filter(|t| t.note().is_some()).map(|t| t.id)
+                if let Some(id) = self
+                    .active_tab()
+                    .filter(|t| t.note().is_some())
+                    .map(|t| t.id)
                     && !self.editor.toggled_tabs.remove(&id)
                 {
                     self.editor.toggled_tabs.insert(id);

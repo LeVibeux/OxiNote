@@ -55,12 +55,7 @@ pub fn next_match(matches: &[Range<usize>], from: usize, forward: bool) -> Optio
         return None;
     }
     if forward {
-        Some(
-            matches
-                .iter()
-                .position(|m| m.start >= from)
-                .unwrap_or(0),
-        )
+        Some(matches.iter().position(|m| m.start >= from).unwrap_or(0))
     } else {
         Some(
             matches

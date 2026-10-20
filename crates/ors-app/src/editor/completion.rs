@@ -156,7 +156,10 @@ mod tests {
     #[test]
     fn detects_links() {
         let c = ctx("see [[Ab").unwrap();
-        assert_eq!((c.kind, c.embed, c.open, c.start), (Kind::Link, false, 4, 6));
+        assert_eq!(
+            (c.kind, c.embed, c.open, c.start),
+            (Kind::Link, false, 4, 6)
+        );
         assert_eq!(c.query, "Ab");
         let c = ctx("x ![[ima").unwrap();
         assert!(c.embed);
@@ -176,13 +179,28 @@ mod tests {
     #[test]
     fn detects_headings_and_blocks() {
         let c = ctx("[[Idées#Fonc").unwrap();
-        assert_eq!(c.kind, Kind::Heading { note: "Idées".into() });
+        assert_eq!(
+            c.kind,
+            Kind::Heading {
+                note: "Idées".into()
+            }
+        );
         assert_eq!(c.query, "Fonc");
         let c = ctx("[[#").unwrap();
-        assert_eq!(c.kind, Kind::Heading { note: String::new() });
+        assert_eq!(
+            c.kind,
+            Kind::Heading {
+                note: String::new()
+            }
+        );
         assert_eq!(c.query, "");
         let c = ctx("![[Idées#^gra").unwrap();
-        assert_eq!(c.kind, Kind::Block { note: "Idées".into() });
+        assert_eq!(
+            c.kind,
+            Kind::Block {
+                note: "Idées".into()
+            }
+        );
         assert_eq!(c.query, "gra");
         assert!(c.embed);
     }

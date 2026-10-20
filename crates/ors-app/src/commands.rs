@@ -156,14 +156,14 @@ impl Default for CommandRegistry {
                 sc(Modifiers::ALT, Key::ArrowDown),
             ),
             spec(FindInNote, "Search current file", sc(c, Key::F)),
-            spec(ReplaceInNote, "Search & replace in current file", sc(c, Key::H)),
+            spec(
+                ReplaceInNote,
+                "Search & replace in current file",
+                sc(c, Key::H),
+            ),
             spec(FoldAll, "Fold all headings and lists", None),
             spec(UnfoldAll, "Unfold all headings and lists", None),
-            spec(
-                ToggleLivePreview,
-                "Toggle Live Preview/Source mode",
-                None,
-            ),
+            spec(ToggleLivePreview, "Toggle Live Preview/Source mode", None),
             spec(ToggleLineNumbers, "Editor: Toggle line numbers", None),
         ];
         Self { specs }

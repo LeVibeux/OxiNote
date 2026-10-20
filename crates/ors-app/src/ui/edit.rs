@@ -115,7 +115,7 @@ fn piece_format(
             LineKind::Callout { kind, header } => {
                 if *header {
                     f.color = pal.callout(kind);
-                } else {
+                } else if !style.link && !style.tag {
                     f.color = pal.text;
                 }
             }
@@ -129,13 +129,16 @@ fn piece_format(
             f.font_id = editor_font(p.size * 0.95, p.mono);
             f.color = pal.faint;
         }
+        if (style.link || style.tag) && !style.code {
+            f.color = pal.accent;
+        }
         if unresolved && style.link {
             f.color = pal.unresolved;
         }
     }
     match conceal {
         Some(Conceal::Hide) => {
-            f.font_id = FontId::new(0.5, FontFamily::Proportional);
+            f.font_id = FontId::new(0.1, FontFamily::Proportional);
             f.color = Color32::TRANSPARENT;
             f.background = Color32::TRANSPARENT;
             f.strikethrough = Stroke::NONE;
@@ -382,7 +385,9 @@ fn items_for(state: &AppState, text: &str, from: &NotePath, ctx: &CompCtx) -> Ve
 
 /// Insert the selected suggestion; returns the new caret.
 fn accept(text: &mut String, state: &AppState, from: &NotePath, c: &CompletionUi) -> Option<Sel> {
-    let item = c.items.get(c.selected.min(c.items.len().saturating_sub(1)))?;
+    let item = c
+        .items
+        .get(c.selected.min(c.items.len().saturating_sub(1)))?;
     Some(match &c.ctx.kind {
         CompKind::Tag => completion::accept_tag(text, &c.ctx, &item.insert),
         CompKind::Link if state.use_markdown_links() && item.target.is_some() => {
@@ -427,7 +432,11 @@ pub fn edit_view(
 ) {
     // The body works on the text taken out of the buffer, so that `state`
     // stays freely usable (index lookups, attachments...).
-    let Some(mut text) = state.buffers.get_mut(path).map(|b| std::mem::take(&mut b.text)) else {
+    let Some(mut text) = state
+        .buffers
+        .get_mut(path)
+        .map(|b| std::mem::take(&mut b.text))
+    else {
         ui.label("Cannot read this file.");
         return;
     };
@@ -454,7 +463,9 @@ fn edit_body(
     let size = state.settings.font_size;
     let mono = state.settings.monospace_editor;
     let readable = state.settings.readable_line_length;
-    let live = state.editor.live(tab_id, state.settings.default_editing_mode);
+    let live = state
+        .editor
+        .live(tab_id, state.settings.default_editing_mode);
     let id = egui::Id::unique(("editor", tab_id));
     let mut edited = false;
     let mut scroll = false;
@@ -612,6 +623,73 @@ fn edit_body(
                 sel_changed = true;
                 edited = true;
             }
+            // Auto-pairing of brackets/quotes and paired backspace; only
+            // when this frame holds a single, unambiguous input event.
+            let (typed, backspace) = ctx.input(|i| {
+                let texts: Vec<&String> = i
+                    .events
+                    .iter()
+                    .filter_map(|e| match e {
+                        Event::Text(s) => Some(s),
+                        _ => None,
+                    })
+                    .collect();
+                let edits_text = i.events.iter().any(|e| {
+                    matches!(
+                        e,
+                        Event::Key {
+                            key: Key::Delete
+                                | Key::Enter
+                                | Key::Tab
+                                | Key::ArrowLeft
+                                | Key::ArrowRight
+                                | Key::ArrowUp
+                                | Key::ArrowDown
+                                | Key::Home
+                                | Key::End,
+                            pressed: true,
+                            ..
+                        } | Event::Paste(_)
+                            | Event::Cut
+                            | Event::Ime(_)
+                    )
+                });
+                let bs = i.events.iter().any(|e| {
+                    matches!(
+                        e,
+                        Event::Key { key: Key::Backspace, pressed: true, modifiers, .. }
+                            if modifiers.is_none()
+                    )
+                });
+                let typed = match texts.as_slice() {
+                    [t] if !edits_text && !bs && t.chars().count() == 1 => t.chars().next(),
+                    _ => None,
+                };
+                (typed, bs && texts.is_empty() && !edits_text)
+            });
+            if let Some(ch) = typed
+                && let Some(new) = fmt::auto_pair(text, cur, ch)
+            {
+                ui.input_mut(|i| i.events.retain(|e| !matches!(e, Event::Text(_))));
+                cur = new;
+                sel_changed = true;
+                edited = true;
+            } else if backspace && let Some(new) = fmt::backspace_pair(text, cur) {
+                ui.input_mut(|i| {
+                    i.events.retain(|e| {
+                        !matches!(
+                            e,
+                            Event::Key {
+                                key: Key::Backspace,
+                                ..
+                            }
+                        )
+                    })
+                });
+                cur = new;
+                sel_changed = true;
+                edited = true;
+            }
             // Smart paste: a URL pasted over a selection makes a link.
             let pasted = ctx.input(|i| {
                 i.events.iter().find_map(|e| match e {
@@ -740,8 +818,14 @@ fn edit_body(
     // The caret moved to another line: restyle on the next frame.
     if let Some(r) = output.cursor_range {
         let (a, b) = (
-            line_of(text_ref, char_to_byte(text_ref, usize::from(r.primary.index))),
-            line_of(text_ref, char_to_byte(text_ref, usize::from(r.secondary.index))),
+            line_of(
+                text_ref,
+                char_to_byte(text_ref, usize::from(r.primary.index)),
+            ),
+            line_of(
+                text_ref,
+                char_to_byte(text_ref, usize::from(r.secondary.index)),
+            ),
         );
         if (a.min(b)..a.max(b) + 1) != active {
             ctx.request_repaint();
@@ -822,7 +906,12 @@ fn edit_body(
         caches.completion = output
             .cursor_range
             .filter(|r| r.is_empty())
-            .and_then(|r| completion::detect(text_ref, char_to_byte(text_ref, usize::from(r.primary.index))))
+            .and_then(|r| {
+                completion::detect(
+                    text_ref,
+                    char_to_byte(text_ref, usize::from(r.primary.index)),
+                )
+            })
             .and_then(|c| {
                 let items = items_for(state, text_ref, path, &c);
                 (!items.is_empty()).then_some(CompletionUi {
@@ -936,10 +1025,7 @@ fn paint_widgets(
         match &l.kind {
             LineKind::Quote => {
                 painter.rect_filled(
-                    Rect::from_min_max(
-                        Pos2::new(off.x - 10.0, y0),
-                        Pos2::new(off.x - 7.0, y1),
-                    ),
+                    Rect::from_min_max(Pos2::new(off.x - 10.0, y0), Pos2::new(off.x - 7.0, y1)),
                     1.5,
                     pal.accent.gamma_multiply(0.8),
                 );
@@ -947,18 +1033,12 @@ fn paint_widgets(
             LineKind::Callout { kind, .. } => {
                 let col = pal.callout(kind);
                 painter.rect_filled(
-                    Rect::from_min_max(
-                        Pos2::new(off.x - 10.0, y0),
-                        Pos2::new(off.x + width, y1),
-                    ),
+                    Rect::from_min_max(Pos2::new(off.x - 10.0, y0), Pos2::new(off.x + width, y1)),
                     0.0,
                     col.gamma_multiply(0.12),
                 );
                 painter.rect_filled(
-                    Rect::from_min_max(
-                        Pos2::new(off.x - 10.0, y0),
-                        Pos2::new(off.x - 7.0, y1),
-                    ),
+                    Rect::from_min_max(Pos2::new(off.x - 10.0, y0), Pos2::new(off.x - 7.0, y1)),
                     1.5,
                     col,
                 );
@@ -1019,7 +1099,11 @@ fn paint_widgets(
                         Stroke::new(1.8, Color32::WHITE),
                     );
                 } else {
-                    let col = if resp.hovered() { pal.accent } else { pal.muted };
+                    let col = if resp.hovered() {
+                        pal.accent
+                    } else {
+                        pal.muted
+                    };
                     painter.rect_stroke(r, 4.0, Stroke::new(1.4, col), egui::StrokeKind::Inside);
                 }
                 if resp.hovered() {
@@ -1088,7 +1172,7 @@ pub fn find_bar(
                     f.current = 0;
                     reveal_current = true;
                 }
-                if resp.has_focus() {
+                if resp.has_focus() || resp.lost_focus() {
                     if ui.input(|i| i.key_pressed(Key::Escape)) {
                         close = true;
                     } else if ui.input(|i| i.key_pressed(Key::Enter)) {
@@ -1104,7 +1188,11 @@ pub fn find_bar(
                     format!("{} of {}", f.current + 1, matches.len())
                 };
                 ui.label(egui::RichText::new(label).color(pal.muted));
-                if ui.small_button("↑").on_hover_text("Previous match").clicked() {
+                if ui
+                    .small_button("↑")
+                    .on_hover_text("Previous match")
+                    .clicked()
+                {
                     step = Some(false);
                 }
                 if ui.small_button("↓").on_hover_text("Next match").clicked() {
@@ -1229,6 +1317,10 @@ mod tests {
         let marks = find_all(t, "été", false);
         let job = build_job(t, &d, &params(0..0, &yes), &marks, 1);
         assert_eq!(job.text, t);
-        assert!(job.sections.iter().any(|s| s.format.background != Color32::TRANSPARENT));
+        assert!(
+            job.sections
+                .iter()
+                .any(|s| s.format.background != Color32::TRANSPARENT)
+        );
     }
 }

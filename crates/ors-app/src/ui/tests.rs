@@ -166,3 +166,85 @@ fn all_panes_render() {
     frames(&mut app, &ctx, 1);
     assert!(app.state.is_none());
 }
+
+fn open_empty(app: &mut ObsiApp, ctx: &egui::Context) -> NotePath {
+    let path = NotePath::new("Orpheline.md").expect("path");
+    state(app).open_at_line(&path, 0, OpenIn::CurrentTab);
+    state(app)
+        .buffers
+        .get_mut(&path)
+        .expect("buffer")
+        .text
+        .clear();
+    frames(app, ctx, 3);
+    path
+}
+
+fn text_of(app: &mut ObsiApp, path: &NotePath) -> String {
+    state(app).buffers[path].text.clone()
+}
+
+#[test]
+fn enter_continues_lists_and_empty_item_ends_them() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    let path = open_empty(&mut app, &ctx);
+    frame(&mut app, &ctx, vec![Event::Text("- idée".into())]);
+    frame(&mut app, &ctx, vec![key(Key::Enter, Modifiers::NONE)]);
+    frames(&mut app, &ctx, 1);
+    assert_eq!(text_of(&mut app, &path), "- idée\n- ");
+    frame(&mut app, &ctx, vec![key(Key::Enter, Modifiers::NONE)]);
+    frames(&mut app, &ctx, 1);
+    assert_eq!(text_of(&mut app, &path), "- idée\n");
+}
+
+#[test]
+fn formatting_shortcuts_apply_to_the_word_at_the_caret() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    let path = open_empty(&mut app, &ctx);
+    frame(&mut app, &ctx, vec![Event::Text("un mot".into())]);
+    frame(&mut app, &ctx, vec![key(Key::B, Modifiers::COMMAND)]);
+    frames(&mut app, &ctx, 2);
+    assert_eq!(text_of(&mut app, &path), "un **mot**");
+    frame(&mut app, &ctx, vec![key(Key::L, Modifiers::COMMAND)]);
+    frames(&mut app, &ctx, 2);
+    assert_eq!(text_of(&mut app, &path), "- [ ] un **mot**");
+    frame(&mut app, &ctx, vec![key(Key::L, Modifiers::COMMAND)]);
+    frames(&mut app, &ctx, 2);
+    assert_eq!(text_of(&mut app, &path), "- [x] un **mot**");
+}
+
+#[test]
+fn ctrl_f_opens_find_bar_and_hash_completes_tags() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    let _ = open_empty(&mut app, &ctx);
+    frame(&mut app, &ctx, vec![key(Key::F, Modifiers::COMMAND)]);
+    frames(&mut app, &ctx, 3);
+    assert!(app.caches.find.is_some());
+    // Close it again with Escape, then complete a tag.
+    frame(&mut app, &ctx, vec![key(Key::Escape, Modifiers::NONE)]);
+    frames(&mut app, &ctx, 2);
+    assert!(app.caches.find.is_none());
+    frame(&mut app, &ctx, vec![Event::Text("#r".into())]);
+    frames(&mut app, &ctx, 1);
+    let c = app.caches.completion.as_ref().map(|c| c.items.len());
+    assert!(c.is_some_and(|n| n > 0), "no tag suggestions");
+}
+
+#[test]
+fn typing_brackets_auto_pairs_and_backspace_removes_the_pair() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    let path = open_empty(&mut app, &ctx);
+    frame(&mut app, &ctx, vec![Event::Text("[".into())]);
+    frames(&mut app, &ctx, 1);
+    assert_eq!(text_of(&mut app, &path), "[]");
+    frame(&mut app, &ctx, vec![Event::Text("[".into())]);
+    frames(&mut app, &ctx, 1);
+    assert_eq!(text_of(&mut app, &path), "[[]]");
+    frame(&mut app, &ctx, vec![key(Key::Backspace, Modifiers::NONE)]);
+    frames(&mut app, &ctx, 1);
+    assert_eq!(text_of(&mut app, &path), "[]");
+}
