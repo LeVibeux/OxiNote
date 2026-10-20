@@ -1,0 +1,13 @@
+[package]
+name = "ors-index"
+description = "Metadata cache, link resolution, backlinks, tags, search and refactoring"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ors-core.workspace = true
+ors-markdown.workspace = true
+
+[lints]
+workspace = true

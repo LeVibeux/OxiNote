@@ -1,0 +1,20 @@
+[package]
+name = "ors-app"
+description = "ObsiRust desktop application"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "obsirust-app"
+path = "src/main.rs"
+
+[dependencies]
+ors-core.workspace = true
+ors-markdown.workspace = true
+ors-vault.workspace = true
+ors-index.workspace = true
+ors-graph.workspace = true
+
+[lints]
+workspace = true

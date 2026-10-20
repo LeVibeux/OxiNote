@@ -1,0 +1,12 @@
+[package]
+name = "ors-markdown"
+description = "Obsidian-flavored markdown parser and HTML renderer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ors-core.workspace = true
+
+[lints]
+workspace = true
