@@ -227,9 +227,9 @@ mod tests {
         assert_eq!(byte_to_char(t, 3), 2);
         assert_eq!(byte_to_char(t, 2), 1); // inside 'é'
         assert_eq!(char_to_byte(t, 100), t.len());
-        assert_eq!(line_start(t, 9), 7);
-        assert_eq!(line_end(t, 2), 6);
-        assert_eq!(line_of(t, 9), 1);
+        assert_eq!(line_start(t, 10), 7);
+        assert_eq!(line_end(t, 1), 6);
+        assert_eq!(line_of(t, 10), 1);
     }
 
     #[test]

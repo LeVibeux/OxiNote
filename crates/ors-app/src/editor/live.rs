@@ -296,8 +296,8 @@ fn decorate_line(
             });
             continue;
         }
-        if s.syntax && s.link && (t == "[[" || t == "![[") {
-            let open = t.len();
+        if s.syntax && s.link && (t.starts_with("[[") || t.starts_with("![[")) {
+            let open = if t.starts_with("![[") { 3 } else { 2 };
             let Some(rel) = text[r.start + open..line_end].find("]]") else {
                 continue;
             };

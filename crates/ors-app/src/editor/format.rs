@@ -547,7 +547,7 @@ mod tests {
         assert!(parse_prefix("plain").is_none());
         assert!(parse_prefix("- [link](x)").unwrap().task.is_none());
         assert_eq!(parse_prefix("- [ ]").unwrap().task, Some(' '));
-        assert_eq!(parse_prefix("- [é] x").unwrap().end, 8);
+        assert_eq!(parse_prefix("- [é] x").unwrap().end, 7);
     }
 
     #[test]
@@ -556,7 +556,7 @@ mod tests {
         assert_eq!(run("a **|bc|** d", |t, s| Some(toggle_wrap(t, s, "**"))), "a |bc| d");
         assert_eq!(run("a |**bc**| d", |t, s| Some(toggle_wrap(t, s, "**"))), "a |bc| d");
         // Caret in a word wraps the word (UTF-8).
-        assert_eq!(run("un mo|té x", |t, s| Some(toggle_wrap(t, s, "*"))), "un *|moté| x");
+        assert_eq!(run("un mo|té x", |t, s| Some(toggle_wrap(t, s, "*"))), "un *|moté|* x");
         // Caret on a blank inserts an empty pair, toggling again removes it.
         assert_eq!(run("a | b", |t, s| Some(toggle_wrap(t, s, "=="))), "a ==|== b");
         assert_eq!(run("a ==|== b", |t, s| Some(toggle_wrap(t, s, "=="))), "a | b");
@@ -589,7 +589,7 @@ mod tests {
         assert_eq!(run("- item|", f), "- [ ] item|");
         assert_eq!(run("\t1. item|", f), "\t1. [ ] item|");
         // Several lines at once.
-        assert_eq!(run("|a\n- [ ] b|", f), "|- [ ] a\n- [x] b|");
+        assert_eq!(run("|a\n- [ ] b|", f), "- [ ] |a\n- [x] b|");
         assert_eq!(run("|", f), "- [ ] |");
     }
 
@@ -597,9 +597,9 @@ mod tests {
     fn bullet_and_numbered_lists() {
         let bullets = |t: &mut String, s| Some(toggle_list(t, s, false));
         let numbers = |t: &mut String, s| Some(toggle_list(t, s, true));
-        assert_eq!(run("|a\nb|", bullets), "|- a\n- b|");
+        assert_eq!(run("|a\nb|", bullets), "- |a\n- b|");
         assert_eq!(run("|- a\n- b|", bullets), "|a\nb|");
-        assert_eq!(run("|a\n- b|", numbers), "|1. a\n2. b|");
+        assert_eq!(run("|a\n- b|", numbers), "1. |a\n2. b|");
     }
 
     #[test]

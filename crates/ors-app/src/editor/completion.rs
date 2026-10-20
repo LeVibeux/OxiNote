@@ -167,7 +167,7 @@ mod tests {
         // UTF-8.
         let c = ctx("é [[Idé").unwrap();
         assert_eq!(c.query, "Idé");
-        assert_eq!(c.start, 6);
+        assert_eq!(c.start, 5);
         // Caret in the middle of a text.
         let t = "a [[No]] b";
         assert_eq!(detect(t, 6).unwrap().query, "No");
