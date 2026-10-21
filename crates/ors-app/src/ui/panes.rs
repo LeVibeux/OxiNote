@@ -50,12 +50,16 @@ pub fn left_sidebar(
         if pane_tab(ui, cur == LeftPane::Tags, "#", "Tags") {
             state.settings.left_pane = LeftPane::Tags;
         }
+        if pane_tab(ui, cur == LeftPane::Properties, "☷", "All properties") {
+            state.settings.left_pane = LeftPane::Properties;
+        }
     });
     ui.separator();
     match state.settings.left_pane {
         LeftPane::Files => explorer(ui, state, caches, actions),
         LeftPane::Search => search_pane(ui, state, actions),
-        LeftPane::Tags => tags_pane(ui, state, actions),
+        LeftPane::Tags => super::tags_view::tags_pane(ui, state, actions),
+        LeftPane::Properties => super::properties_view::all_properties_pane(ui, state, actions),
     }
 }
 
@@ -256,79 +260,6 @@ fn search_pane(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Action
     super::view_panes::search_pane(ui, state, actions);
 }
 
-#[derive(Default)]
-struct TagNode {
-    count: usize,
-    children: BTreeMap<String, TagNode>,
-}
-
-fn tags_pane(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Action>) {
-    let pal = Palette::of(ui.ctx());
-    let tags = state.index.tags();
-    if tags.is_empty() {
-        ui.label(RichText::new("No tags found.").color(pal.muted));
-        return;
-    }
-    let mut root = TagNode::default();
-    for (tag, count) in &tags {
-        let mut node = &mut root;
-        for part in tag.split('/') {
-            node = node.children.entry(part.to_string()).or_default();
-        }
-        node.count = *count;
-    }
-    egui::ScrollArea::vertical()
-        .auto_shrink([false, false])
-        .show(ui, |ui| {
-            tag_nodes(ui, &root, "", &pal, actions);
-        });
-}
-
-fn tag_nodes(
-    ui: &mut egui::Ui,
-    node: &TagNode,
-    prefix: &str,
-    pal: &Palette,
-    actions: &mut Vec<Action>,
-) {
-    for (name, child) in &node.children {
-        let full = if prefix.is_empty() {
-            name.clone()
-        } else {
-            format!("{prefix}/{name}")
-        };
-        let row = |ui: &mut egui::Ui, actions: &mut Vec<Action>| {
-            ui.horizontal(|ui| {
-                let r = ui.add(
-                    egui::Label::new(RichText::new(format!("#{name}")).color(pal.accent))
-                        .sense(Sense::click()),
-                );
-                if r.on_hover_cursor(egui::CursorIcon::PointingHand).clicked() {
-                    actions.push(Action::SearchTag(full.clone()));
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(
-                        RichText::new(child.count.to_string())
-                            .small()
-                            .color(pal.faint),
-                    );
-                });
-            });
-        };
-        if child.children.is_empty() {
-            ui.horizontal(|ui| {
-                ui.add_space(18.0);
-                ui.vertical(|ui| row(ui, actions));
-            });
-        } else {
-            let id = ui.make_persistent_id(("tag", &full));
-            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, true)
-                .show_header(ui, |ui| row(ui, actions))
-                .body(|ui| tag_nodes(ui, child, &full, pal, actions));
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Right sidebar
 // ---------------------------------------------------------------------------
@@ -349,6 +280,9 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
         }
         if pane_tab(ui, cur == RightPane::LocalGraph, "⎔", "Local graph") {
             state.settings.right_pane = RightPane::LocalGraph;
+        }
+        if pane_tab(ui, cur == RightPane::FileProperties, "☷", "File properties") {
+            state.settings.right_pane = RightPane::FileProperties;
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui
@@ -374,6 +308,9 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
         RightPane::Backlinks => super::view_panes::backlinks_pane(ui, state, &path, actions),
         RightPane::Outgoing => super::view_panes::outgoing_pane(ui, state, &path, actions),
         RightPane::Outline => super::view_panes::outline_pane(ui, state, &path, actions),
+        RightPane::FileProperties => {
+            super::properties_view::panel(ui, state, &path, "side", false, actions);
+        }
         RightPane::LocalGraph => {}
     }
 }

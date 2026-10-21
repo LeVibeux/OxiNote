@@ -13,7 +13,9 @@ use ors_core::{
     NotePath, ParsedNote, Result, Span, Subpath, Tag, VaultRead, VaultWrite,
 };
 use ors_graph::Vec2;
-use ors_index::{Backlink, GraphOptions, ResolvedLink, SearchMatch, SearchResult};
+use ors_index::{
+    Backlink, GraphOptions, PropertyInfo, ResolvedLink, SearchMatch, SearchResult, TagNode,
+};
 
 use crate::backend::{IndexBackend, LayoutEngine, MemVault};
 use crate::util::fuzzy_score;
@@ -173,6 +175,45 @@ impl LinkResolver for FakeIndex {
     }
 }
 
+/// Tag tree from flat `name -> count` tags (demo/test only).
+fn fake_tag_tree(tags: &BTreeMap<String, usize>) -> Vec<TagNode> {
+    fn insert(level: &mut Vec<TagNode>, parts: &[&str], depth: usize, count: usize) {
+        let name = parts[depth];
+        let full = parts[..=depth].join("/");
+        let i = match level.iter().position(|n| n.full_name == full) {
+            Some(i) => i,
+            None => {
+                level.push(TagNode {
+                    name: name.to_string(),
+                    full_name: full,
+                    count: 0,
+                    children: Vec::new(),
+                });
+                level.len() - 1
+            }
+        };
+        if depth + 1 == parts.len() {
+            level[i].count = count;
+        } else {
+            insert(&mut level[i].children, parts, depth + 1, count);
+        }
+    }
+    let mut roots = Vec::new();
+    for (tag, count) in tags {
+        let parts: Vec<&str> = tag.split('/').collect();
+        insert(&mut roots, &parts, 0, *count);
+    }
+    roots
+}
+
+impl FakeIndex {
+    fn frontmatters(&self) -> impl Iterator<Item = (&NotePath, ors_core::Frontmatter)> {
+        self.sources
+            .iter()
+            .filter_map(|(p, s)| ors_markdown::properties::get_properties(s).map(|f| (p, f)))
+    }
+}
+
 impl IndexBackend for FakeIndex {
     fn files(&self) -> Vec<NotePath> {
         self.files.clone()
@@ -218,6 +259,79 @@ impl IndexBackend for FakeIndex {
                     .collect()
             })
             .unwrap_or_default()
+    }
+    fn properties(&self) -> BTreeMap<String, PropertyInfo> {
+        let mut out: BTreeMap<String, PropertyInfo> = BTreeMap::new();
+        for (_, fm) in self.frontmatters() {
+            for (k, v) in &fm {
+                let ty = ors_markdown::properties::infer_type_name(v);
+                let info = out.entry(k.to_lowercase()).or_insert_with(|| PropertyInfo {
+                    name: k.clone(),
+                    count: 0,
+                    inferred_type: ty,
+                    type_counts: BTreeMap::new(),
+                });
+                info.count += 1;
+                *info.type_counts.entry(ty).or_default() += 1;
+            }
+        }
+        out
+    }
+    fn property_values(&self, key: &str) -> BTreeMap<String, usize> {
+        let mut out = BTreeMap::new();
+        for (_, fm) in self.frontmatters() {
+            let Some((_, v)) = fm.iter().find(|(k, _)| k.eq_ignore_ascii_case(key)) else {
+                continue;
+            };
+            let items = match v {
+                serde_json::Value::Array(a) => a.clone(),
+                other => vec![other.clone()],
+            };
+            for i in items {
+                let t = match i {
+                    serde_json::Value::String(s) => s,
+                    serde_json::Value::Null => continue,
+                    other => other.to_string(),
+                };
+                if !t.trim().is_empty() {
+                    *out.entry(t).or_insert(0) += 1;
+                }
+            }
+        }
+        out
+    }
+    fn files_with_property(&self, key: &str) -> Vec<NotePath> {
+        self.frontmatters()
+            .filter(|(_, fm)| fm.keys().any(|k| k.eq_ignore_ascii_case(key)))
+            .map(|(p, _)| p.clone())
+            .collect()
+    }
+    fn tag_tree(&self) -> Vec<TagNode> {
+        fake_tag_tree(&self.tags())
+    }
+    fn tag_suggestions(&self, prefix: &str, limit: usize) -> Vec<(String, usize)> {
+        let q = prefix.trim_start_matches('#').to_lowercase();
+        let mut v: Vec<(String, usize)> = self
+            .tags()
+            .into_iter()
+            .filter(|(t, _)| t.contains(&q))
+            .collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        v.truncate(limit);
+        v
+    }
+    fn files_with_tag(&self, tag: &str) -> Vec<NotePath> {
+        let t = tag.trim_start_matches('#').to_lowercase();
+        self.notes
+            .iter()
+            .filter(|(_, n)| {
+                n.tags.iter().any(|x| {
+                    let x = x.name.to_lowercase();
+                    x == t || x.starts_with(&format!("{t}/"))
+                })
+            })
+            .map(|(p, _)| p.clone())
+            .collect()
     }
     fn tags(&self) -> BTreeMap<String, usize> {
         let mut out = BTreeMap::new();

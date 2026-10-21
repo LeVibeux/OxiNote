@@ -123,11 +123,27 @@ impl FsTarget {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Modal {
-    QuickSwitcher { query: String, selected: usize },
-    CommandPalette { query: String, selected: usize },
-    Rename { target: FsTarget, name: String },
-    NewFolder { parent: String, name: String },
-    ConfirmDelete { target: FsTarget },
+    QuickSwitcher {
+        query: String,
+        selected: usize,
+    },
+    CommandPalette {
+        query: String,
+        selected: usize,
+    },
+    Rename {
+        target: FsTarget,
+        name: String,
+    },
+    NewFolder {
+        parent: String,
+        name: String,
+    },
+    ConfirmDelete {
+        target: FsTarget,
+    },
+    /// Properties / tags dialogs.
+    Props(crate::properties_model::PropsModal),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -185,6 +201,9 @@ pub struct AppState {
     pub editor: crate::editor::EditorState,
     /// Graph, search, backlinks, outline and reading view state.
     pub views: crate::views::ViewsState,
+    /// Set by the "Add property" command: the Properties panel opens its
+    /// name field on next frame.
+    pub add_property_requested: bool,
 }
 
 impl AppState {
@@ -221,6 +240,7 @@ impl AppState {
             switch_vault_requested: false,
             focus_search: false,
             editor: crate::editor::EditorState::default(),
+            add_property_requested: false,
             vault: {
                 if let Err(e) = vault.start_watching() {
                     eprintln!("file watcher unavailable: {e}");
@@ -269,7 +289,7 @@ impl AppState {
         self.folders = self.vault.list_folders().unwrap_or_default();
     }
 
-    fn bump(&mut self) {
+    pub(crate) fn bump(&mut self) {
         self.generation += 1;
     }
 
@@ -1089,6 +1109,11 @@ impl AppState {
                 self.settings.left_open = true;
                 self.settings.left_pane = LeftPane::Tags;
             }
+            Command::AddProperty => self.request_add_property(),
+            Command::ShowProperties => {
+                self.settings.left_open = true;
+                self.settings.left_pane = LeftPane::Properties;
+            }
             Command::ShowFiles => {
                 self.settings.left_open = true;
                 self.settings.left_pane = LeftPane::Files;
@@ -1157,6 +1182,7 @@ impl AppState {
             } => self.rename_folder(&f, &name),
             Modal::NewFolder { parent, name } => self.create_folder(&parent, &name),
             Modal::ConfirmDelete { target } => self.delete(&target),
+            Modal::Props(m) => self.confirm_props_modal(m),
             Modal::QuickSwitcher { .. } | Modal::CommandPalette { .. } => {}
         }
     }

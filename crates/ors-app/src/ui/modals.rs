@@ -54,6 +54,7 @@ pub fn show(
             }
         }
         Modal::ConfirmDelete { target } => confirm_delete(ctx, target, actions),
+        Modal::Props(m) => super::properties_view::dialog(ctx, state, m, actions),
     }
 }
 

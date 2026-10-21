@@ -7,7 +7,9 @@ mod editor;
 mod graph;
 mod modals;
 mod panes;
+mod properties_view;
 mod reading_view;
+mod tags_view;
 #[cfg(test)]
 mod tests;
 pub mod theme;
@@ -55,6 +57,7 @@ pub enum Action {
     /// Requests of the graph / search / backlinks / outline / reading views.
     View(crate::views::ViewAction),
     Error(String),
+    Props(crate::properties_model::PropAction),
 }
 
 fn apply(state: &mut AppState, action: Action) {
@@ -81,6 +84,7 @@ fn apply(state: &mut AppState, action: Action) {
         Action::MoveTab(a, b) => state.move_tab(a, b),
         Action::Resolve(p, keep) => state.resolve_conflict(&p, keep),
         Action::Edited(p) => state.buffer_edited(&p),
+        Action::Props(a) => state.apply_prop_action(a),
         Action::ShowBacklinks => {
             state.settings.right_open = true;
             state.settings.right_pane = RightPane::Backlinks;
@@ -615,6 +619,15 @@ fn central(
                     } else if mode == ViewMode::Reading {
                         reading_view::reading_view(ui, state, caches, &path, scroll_to, actions);
                     } else {
+                        if crate::properties_model::panel_visible(&state.settings) {
+                            editor::readable_column(
+                                ui,
+                                state.settings.readable_line_length,
+                                |ui| {
+                                    properties_view::panel(ui, state, &path, "doc", true, actions);
+                                },
+                            );
+                        }
                         edit::edit_view(ui, state, caches, tab_id, &path, actions);
                     }
                 });

@@ -84,6 +84,8 @@ struct Params<'a> {
     live: bool,
     /// 0-based lines that show raw markdown (caret / selection).
     active: Range<usize>,
+    /// Hide the raw YAML block (the Properties panel replaces it).
+    hide_frontmatter: bool,
     resolves: &'a dyn Fn(&str) -> bool,
 }
 
@@ -176,10 +178,31 @@ fn build_job(
         .collect();
     let mut pieces: Vec<(Range<usize>, TextFormat)> = Vec::new();
     let (mut si, mut ci, mut ui_) = (0usize, 0usize, 0usize);
+    // The YAML block stays in the buffer but is invisible, unless the caret
+    // is inside it.
+    let hide_fm = p.live
+        && p.hide_frontmatter
+        && !decor
+            .lines
+            .iter()
+            .enumerate()
+            .any(|(n, l)| l.kind == LineKind::Frontmatter && p.active.contains(&n));
     for (n, line) in decor.lines.iter().enumerate() {
         let r = line.range.clone();
         while si < spans.len() && spans[si].0.end <= r.start {
             si += 1;
+        }
+        if hide_fm && line.kind == LineKind::Frontmatter {
+            let next = decor.lines.get(n + 1).map_or(text.len(), |l| l.range.start);
+            if next > r.start {
+                let f = TextFormat {
+                    font_id: FontId::new(0.1, FontFamily::Proportional),
+                    color: Color32::TRANSPARENT,
+                    ..TextFormat::default()
+                };
+                pieces.push((r.start..next, f));
+            }
+            continue;
         }
         let concealed = p.live && !p.active.contains(&n);
         let line_spans = spans[si..]
@@ -730,6 +753,7 @@ fn edit_body(
         .filter(|f| f.tab == tab_id && !f.query.is_empty())
         .map(|f| (f.query.clone(), f.case, f.current));
     let generation = state.generation;
+    let hide_frontmatter = crate::properties_model::frontmatter_hidden(&state.settings);
     let index: &dyn IndexBackend = &*state.index;
     let from = path.clone();
     let resolves = |t: &str| index.resolve(t, &from).is_some();
@@ -753,6 +777,7 @@ fn edit_body(
             mono,
             pal.text,
             live,
+            hide_frontmatter,
             active_for_layout.start,
             active_for_layout.end,
             generation,
@@ -771,6 +796,7 @@ fn edit_body(
                     pal,
                     live,
                     active: active_for_layout.clone(),
+                    hide_frontmatter,
                     resolves: &resolves,
                 };
                 let cur = find_params.as_ref().map_or(usize::MAX, |p| p.2);
@@ -1288,6 +1314,7 @@ mod tests {
             pal: Palette::dark(),
             live: true,
             active,
+            hide_frontmatter: false,
             resolves,
         }
     }
@@ -1306,6 +1333,40 @@ mod tests {
         // ... but shown when the caret is on that line.
         let job = build_job(t, &d, &params(0..1, &yes), &[], 0);
         assert_eq!(job.text, t);
+        assert_ne!(job.sections[0].format.color, Color32::TRANSPARENT);
+    }
+
+    #[test]
+    fn frontmatter_is_invisible_when_hidden() {
+        let t = "---\ntags: [a]\n---\n# Titre\n";
+        let d = decorate(t);
+        let yes = |_: &str| true;
+        let mut p = params(3..3, &yes);
+        p.hide_frontmatter = true;
+        let job = build_job(t, &d, &p, &[], 0);
+        assert_eq!(job.text, t);
+        let fm_end = t.find("# Titre").unwrap_or(0);
+        for s in job
+            .sections
+            .iter()
+            .filter(|s| usize::from(s.byte_range.start) < fm_end)
+        {
+            assert_eq!(s.format.color, Color32::TRANSPARENT);
+            assert!(s.format.font_id.size < 1.0);
+        }
+        // The heading after the block stays visible.
+        assert!(
+            job.sections
+                .last()
+                .is_some_and(|s| s.format.font_id.size > 1.0)
+        );
+        // Shown when the caret is inside the block, or when not hidden.
+        p.active = 1..2;
+        let job = build_job(t, &d, &p, &[], 0);
+        assert_ne!(job.sections[0].format.color, Color32::TRANSPARENT);
+        p.active = 3..3;
+        p.hide_frontmatter = false;
+        let job = build_job(t, &d, &p, &[], 0);
         assert_ne!(job.sections[0].format.color, Color32::TRANSPARENT);
     }
 

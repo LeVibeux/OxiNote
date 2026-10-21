@@ -19,6 +19,8 @@ pub enum LeftPane {
     Files,
     Search,
     Tags,
+    /// "All properties" view.
+    Properties,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -28,6 +30,21 @@ pub enum RightPane {
     Outgoing,
     Outline,
     LocalGraph,
+    /// Properties of the active note.
+    FileProperties,
+}
+
+/// How the frontmatter is shown in notes (Obsidian's "Properties in
+/// document").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum PropertiesInDocument {
+    /// The Properties panel replaces the raw YAML.
+    #[default]
+    Visible,
+    /// Neither panel nor raw YAML.
+    Hidden,
+    /// The raw YAML block.
+    Source,
 }
 
 /// How notes open for editing (Obsidian's "Default editing mode").
@@ -49,6 +66,7 @@ pub struct Settings {
     pub left_pane: LeftPane,
     pub right_pane: RightPane,
     pub readable_line_length: bool,
+    pub properties_in_document: PropertiesInDocument,
     /// Autosave delay after the last keystroke, in seconds.
     pub autosave_delay: f64,
     /// Live Preview or Source mode when editing.
@@ -66,6 +84,7 @@ impl Default for Settings {
             left_pane: LeftPane::Files,
             right_pane: RightPane::Backlinks,
             readable_line_length: true,
+            properties_in_document: PropertiesInDocument::Visible,
             autosave_delay: 1.0,
             default_editing_mode: EditingMode::LivePreview,
         }
