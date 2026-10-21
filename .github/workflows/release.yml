@@ -1,0 +1,181 @@
+name: Release
+
+# Builds the app and the CLI for Linux, macOS and Windows and publishes a
+# GitHub release. Either push a tag like `v0.1.0` (`v0.1.0-rc.1` for a
+# pre-release), or run this workflow by hand (Actions > Release > Run
+# workflow) with the version: the tag is then created on the chosen commit.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, e.g. v0.1.0 (v0.1.0-rc.1 for a pre-release)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  TAG: ${{ inputs.version || github.ref_name }}
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest supported Ubuntu LTS: binaries built against an older glibc
+          # also run on newer releases.
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check version
+        shell: bash
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "invalid version: $TAG"; exit 1; }
+          # The binaries report the workspace version (`--version`, About page):
+          # the tag must match it. A pre-release suffix (-rc.1) is allowed for
+          # candidates of that same version.
+          cargo_version=$(sed -n '/^\[workspace.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p;}' Cargo.toml)
+          base=${TAG#v}; base=${base%%-*}
+          [[ "$base" == "$cargo_version" ]] || {
+            echo "tag $TAG does not match the workspace version $cargo_version in Cargo.toml: bump it first"
+            exit 1
+          }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }} -p ors-app -p ors-cli
+
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          name="obsirust-${TAG}-${{ matrix.target }}"
+          mkdir -p "$name"
+          cp target/${{ matrix.target }}/release/obsirust-app target/${{ matrix.target }}/release/obsirust "$name/"
+          cp assets/linux/obsirust.desktop "$name/"
+          cp assets/logo/obsirust-icon-256.png "$name/obsirust.png"
+          cp README.md "$name/"
+          mkdir -p dist
+          tar czf "dist/$name.tar.gz" "$name"
+          scripts/build-deb.sh target/${{ matrix.target }}/release "$TAG" dist
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          name="obsirust-${TAG}-${{ matrix.target }}"
+          # Apple wants three dot-separated integers: drop any -rc suffix.
+          version="${TAG#v}"
+          version="${version%%-*}"
+          app="$name/ObsiRust.app"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+          cp target/${{ matrix.target }}/release/obsirust-app "$app/Contents/MacOS/"
+          cp target/${{ matrix.target }}/release/obsirust "$name/"
+          cp README.md "$name/"
+          # App icon (.icns) from the 1024 px logo.
+          iconset=ObsiRust.iconset
+          mkdir -p "$iconset"
+          for s in 16 32 128 256 512; do
+            sips -z $s $s assets/logo/obsirust-icon.png --out "$iconset/icon_${s}x${s}.png" >/dev/null
+            d=$((s * 2))
+            sips -z $d $d assets/logo/obsirust-icon.png --out "$iconset/icon_${s}x${s}@2x.png" >/dev/null
+          done
+          iconutil -c icns "$iconset" -o "$app/Contents/Resources/ObsiRust.icns"
+          cat > "$app/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>ObsiRust</string>
+            <key>CFBundleDisplayName</key><string>ObsiRust</string>
+            <key>CFBundleIdentifier</key><string>io.github.levibeux.obsirust</string>
+            <key>CFBundleVersion</key><string>${version}</string>
+            <key>CFBundleShortVersionString</key><string>${version}</string>
+            <key>CFBundleExecutable</key><string>obsirust-app</string>
+            <key>CFBundleIconFile</key><string>ObsiRust</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          EOF
+          # Ad-hoc signature: required for Apple Silicon binaries to launch.
+          codesign --force --deep --sign - "$app"
+          codesign --force --sign - "$name/obsirust"
+          mkdir -p dist
+          ditto -c -k --keepParent "$name" "dist/$name.zip"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $name = "obsirust-$env:TAG-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path $name | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/obsirust-app.exe" $name
+          Copy-Item "target/${{ matrix.target }}/release/obsirust.exe" $name
+          Copy-Item "assets/logo/obsirust.ico" $name
+          Copy-Item "README.md" $name
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Compress-Archive -Path $name -DestinationPath "dist/$name.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: ObsiRust ${{ env.TAG }}
+          files: dist/*
+          prerelease: ${{ contains(env.TAG, '-') }}
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            Téléchargez l'archive de votre système ci-dessous et décompressez-la.
+
+            | Système | Fichier | Lancer |
+            |---|---|---|
+            | macOS (Apple Silicon : M1, M2, M3…) | `…-aarch64-apple-darwin.zip` | `ObsiRust.app` |
+            | macOS (Intel) | `…-x86_64-apple-darwin.zip` | `ObsiRust.app` |
+            | Windows | `…-x86_64-pc-windows-msvc.zip` | `obsirust-app.exe` |
+            | Ubuntu / Debian | `obsirust_…_amd64.deb` | double-clic, ou `sudo apt install ./obsirust_…_amd64.deb`, puis ObsiRust dans le menu des applications |
+            | Autres Linux | `…-x86_64-unknown-linux-gnu.tar.gz` | `./obsirust-app` |
+
+            Chaque archive contient aussi le CLI `obsirust` (`obsirust --help`).
+
+            **Applications non signées.** Au premier lancement :
+            - **macOS** : clic droit sur `ObsiRust.app` → *Ouvrir* → *Ouvrir*. Si macOS refuse encore : `xattr -dr com.apple.quarantine ObsiRust.app`.
+            - **Windows** : SmartScreen → *Informations complémentaires* → *Exécuter quand même*.
+
+            Les sommes SHA-256 sont dans `SHA256SUMS.txt`.

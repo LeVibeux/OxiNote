@@ -11,6 +11,9 @@
 //! `--theme dark|light`, `--left files|search|tags|properties`,
 //! `--right backlinks|outgoing|outline|properties`, `--fresh`, `--renderer glow|wgpu`.
 
+// Release builds on Windows are GUI apps: no console window behind them.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod backend;
 mod bookmarks;
 mod commands;
