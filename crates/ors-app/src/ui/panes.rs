@@ -150,6 +150,16 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
             state.settings.right_pane = RightPane::History;
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if super::explorer_ui::icon_button(
+                ui,
+                super::icons::SIDEBAR,
+                "Collapse right sidebar",
+                false,
+            )
+            .clicked()
+            {
+                actions.push(Action::Exec(Command::ToggleRightSidebar));
+            }
             if ui
                 .small_button("↗")
                 .on_hover_text("Open local graph in a tab")
