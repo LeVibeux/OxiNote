@@ -552,6 +552,9 @@ pub trait IndexBackend: LinkResolver {
     fn remove_file(&mut self, path: &NotePath);
     fn rename_file(&mut self, from: &NotePath, to: &NotePath);
     fn search(&self, query: &str) -> Result<Vec<SearchResult>>;
+    /// Hide files matching `userIgnoreFilters` ("Excluded files") from
+    /// search and the graph.
+    fn set_user_ignore_filters(&mut self, _filters: Vec<String>) {}
     fn fuzzy_find(&self, query: &str, limit: usize) -> Vec<(NotePath, Option<String>, i64)>;
     /// [`IndexBackend::fuzzy_find`], optionally including attachments
     /// (`![[` completion).
@@ -600,14 +603,47 @@ pub trait IndexBackend: LinkResolver {
 pub struct RealIndex {
     cache: MetadataCache,
     search: SearchIndex,
+    ignore: AppConfig,
 }
 
 impl RealIndex {
     pub fn build(vault: &dyn VaultRead) -> Result<Self> {
         let cache = MetadataCache::build(vault)?;
         let search = SearchIndex::build(vault, &cache)?;
-        Ok(Self { cache, search })
+        Ok(Self {
+            cache,
+            search,
+            ignore: AppConfig::default(),
+        })
     }
+
+    fn ignored(&self, path: &NotePath) -> bool {
+        self.ignore.is_user_ignored(path.as_str())
+    }
+}
+
+/// `g` without the nodes whose path is `ignored`, edges reindexed.
+fn without_ignored(g: GraphData, ignored: impl Fn(&NotePath) -> bool) -> GraphData {
+    let mut map = vec![None; g.nodes.len()];
+    let mut out = GraphData::default();
+    for (i, n) in g.nodes.into_iter().enumerate() {
+        if n.path.as_ref().is_some_and(&ignored) {
+            continue;
+        }
+        map[i] = Some(out.nodes.len());
+        out.nodes.push(n);
+    }
+    out.edges = g
+        .edges
+        .into_iter()
+        .filter_map(|e| {
+            Some(ors_core::GraphEdge {
+                source: map[e.source]?,
+                target: map[e.target]?,
+            })
+        })
+        .collect();
+    out
 }
 
 impl LinkResolver for RealIndex {
@@ -654,7 +690,11 @@ impl IndexBackend for RealIndex {
         self.cache.files_with_tag(tag)
     }
     fn graph(&self, options: &GraphOptions) -> GraphData {
-        self.cache.graph(options)
+        let g = self.cache.graph(options);
+        if self.ignore.user_ignore_filters.is_empty() {
+            return g;
+        }
+        without_ignored(g, |p| self.ignored(p))
     }
     fn link_text_for(&self, target: &NotePath, from: &NotePath) -> String {
         self.cache.link_text_for(target, from)
@@ -680,7 +720,12 @@ impl IndexBackend for RealIndex {
         self.search.rename(from, to);
     }
     fn search(&self, query: &str) -> Result<Vec<SearchResult>> {
-        self.search.search(query, &self.cache)
+        let mut results = self.search.search(query, &self.cache)?;
+        results.retain(|r| !self.ignored(&r.path));
+        Ok(results)
+    }
+    fn set_user_ignore_filters(&mut self, filters: Vec<String>) {
+        self.ignore.user_ignore_filters = filters;
     }
     fn fuzzy_find(&self, query: &str, limit: usize) -> Vec<(NotePath, Option<String>, i64)> {
         ors_index::fuzzy_find(&self.cache, query, limit)
@@ -823,5 +868,31 @@ mod tests {
         v.external_write(&n, "hi").unwrap();
         assert_eq!(v.poll_events(), vec![VaultEvent::Created(n)]);
         assert!(v.poll_events().is_empty());
+    }
+
+    #[test]
+    fn excluded_files_hidden_from_search_and_graph() {
+        let v = MemVault::with_files(
+            "t",
+            [
+                ("Archive/old.md", "rust [[keep]]"),
+                ("keep.md", "rust [[Archive/old]]"),
+            ],
+        );
+        let mut idx = RealIndex::build(&v).unwrap();
+        assert_eq!(idx.search("rust").unwrap().len(), 2);
+        idx.set_user_ignore_filters(vec!["Archive/".into()]);
+        let hits = idx.search("rust").unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].path.as_str(), "keep.md");
+        let g = idx.graph(&GraphOptions::default());
+        assert!(g.nodes.iter().all(|n| n.id != "Archive/old.md"));
+        assert!(
+            g.edges
+                .iter()
+                .all(|e| e.source < g.nodes.len() && e.target < g.nodes.len())
+        );
+        idx.set_user_ignore_filters(Vec::new());
+        assert_eq!(idx.search("rust").unwrap().len(), 2);
     }
 }

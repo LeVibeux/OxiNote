@@ -27,6 +27,9 @@ pub struct ExportSummary {
 /// Check (and create) the output folder. Refuses a non-empty folder unless
 /// `force`, and the vault folder itself.
 pub fn prepare_out_dir(vault_dir: &Path, out_dir: &Path, force: bool) -> Result<()> {
+    if inside_vault(vault_dir, out_dir) {
+        bail!("refusing to export into the vault folder or one of its subfolders");
+    }
     if out_dir.exists() {
         if !out_dir.is_dir() {
             bail!(
@@ -44,15 +47,42 @@ pub fn prepare_out_dir(vault_dir: &Path, out_dir: &Path, force: bool) -> Result<
                 out_dir.display()
             );
         }
-        let same = match (fs::canonicalize(vault_dir), fs::canonicalize(out_dir)) {
-            (Ok(a), Ok(b)) => a == b,
-            _ => false,
-        };
-        if same {
-            bail!("refusing to export into the vault folder itself");
-        }
     }
     fs::create_dir_all(out_dir).with_context(|| format!("cannot create {}", out_dir.display()))
+}
+
+/// `true` if `out_dir` is `vault_dir` or lies inside it. `out_dir` may not
+/// exist yet: its nearest existing ancestor is canonicalized.
+fn inside_vault(vault_dir: &Path, out_dir: &Path) -> bool {
+    let Ok(vault) = fs::canonicalize(vault_dir) else {
+        return false;
+    };
+    let abs = if out_dir.is_absolute() {
+        out_dir.to_path_buf()
+    } else {
+        match std::env::current_dir() {
+            Ok(d) => d.join(out_dir),
+            Err(_) => return false,
+        }
+    };
+    let mut existing = abs.as_path();
+    let mut rest = Vec::new();
+    while !existing.exists() {
+        match (existing.parent(), existing.file_name()) {
+            (Some(p), Some(n)) => {
+                rest.push(n.to_os_string());
+                existing = p;
+            }
+            _ => return false,
+        }
+    }
+    let Ok(mut out) = fs::canonicalize(existing) else {
+        return false;
+    };
+    for n in rest.into_iter().rev() {
+        out.push(n);
+    }
+    out.starts_with(&vault)
 }
 
 fn write_file(out_dir: &Path, rel: &str, contents: &[u8]) -> Result<()> {
@@ -232,7 +262,11 @@ mod tests {
         let err = prepare_out_dir(&vault, &vault, true)
             .unwrap_err()
             .to_string();
-        assert!(err.contains("vault folder itself"), "{err}");
+        assert!(err.contains("vault folder"), "{err}");
+        // So is any folder inside the vault, existing or not.
+        assert!(prepare_out_dir(&vault, &vault.join("site"), true).is_err());
+        fs::create_dir_all(vault.join("pub")).unwrap();
+        assert!(prepare_out_dir(&vault, &vault.join("pub/out"), true).is_err());
         let file = out.join("x");
         assert!(prepare_out_dir(&vault, &file, true).is_err());
         let _ = fs::remove_dir_all(&vault);

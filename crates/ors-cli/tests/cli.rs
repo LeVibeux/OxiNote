@@ -129,7 +129,7 @@ fn export_refuses_non_empty_out_dir() {
 #[test]
 fn export_refuses_vault_itself() {
     let err = run_err(&["export", &vault_arg(), &vault_arg(), "--force"]);
-    assert!(err.contains("vault folder itself"), "{err}");
+    assert!(err.contains("vault folder"), "{err}");
 }
 
 #[test]

@@ -512,6 +512,9 @@ fn files_page(ui: &mut egui::Ui, state: &mut AppState, win: &mut SettingsWindow)
             .filter(|l| !l.is_empty())
             .map(String::from)
             .collect();
+        state
+            .index
+            .set_user_ignore_filters(win.app.user_ignore_filters.clone());
         changed = true;
     }
     if changed && let Err(e) = state.vault.save_app_config(&win.app) {

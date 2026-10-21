@@ -266,3 +266,21 @@ fn rename_folder_moves_everything() {
     assert!(rename_folder_with_links(&vault, &mut c, "x", "x/y").is_err());
     assert!(rename_folder_with_links(&vault, &mut c, "", "y").is_err());
 }
+
+#[test]
+fn rename_folder_clash_moves_nothing() {
+    let files = [
+        ("old/a.md", "[[b]]"),
+        ("old/b.md", ""),
+        ("new/b.md", "taken"),
+        ("keep.md", "[[a]]"),
+    ];
+    let vault = vault_of(&files);
+    let mut c = cache_of(&files);
+    let before = vault.list_files().unwrap();
+    assert!(rename_folder_with_links(&vault, &mut c, "old", "new").is_err());
+    assert_eq!(vault.list_files().unwrap(), before);
+    assert_eq!(c.files(), before);
+    let keep = ors_core::NotePath::new("keep.md").unwrap();
+    assert_eq!(vault.read_to_string(&keep).unwrap(), "[[a]]");
+}

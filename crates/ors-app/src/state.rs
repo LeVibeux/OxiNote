@@ -218,7 +218,8 @@ impl AppState {
         index_factory: IndexFactory,
         settings: Settings,
     ) -> Self {
-        let index = index_factory(vault.as_read());
+        let mut index = index_factory(vault.as_read());
+        index.set_user_ignore_filters(vault.app_config().unwrap_or_default().user_ignore_filters);
         let views = crate::views::ViewsState::new(vault.root().as_deref());
         let mut state = Self {
             views,
@@ -995,6 +996,12 @@ impl AppState {
     pub fn reload_vault(&mut self) {
         self.save_all();
         self.index = (self.index_factory)(self.vault.as_read());
+        self.index.set_user_ignore_filters(
+            self.vault
+                .app_config()
+                .unwrap_or_default()
+                .user_ignore_filters,
+        );
         let open: Vec<NotePath> = self.buffers.keys().cloned().collect();
         for p in open {
             self.reload_clean_buffer(&p);

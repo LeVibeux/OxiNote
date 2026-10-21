@@ -300,10 +300,18 @@ pub fn rename_folder_with_links(
         .into_iter()
         .filter(|p| p.as_str().starts_with(&prefix))
         .collect();
-    let mut changed: BTreeSet<NotePath> = BTreeSet::new();
+    // Check every destination before moving anything, so a clash never
+    // leaves the folder half moved.
+    let mut moves = Vec::with_capacity(files.len());
     for f in files {
-        let rest = &f.as_str()[prefix.len()..];
-        let to = NotePath::join(to_f, rest)?;
+        let to = NotePath::join(to_f, &f.as_str()[prefix.len()..])?;
+        if vault.exists(&to) {
+            return Err(Error::AlreadyExists(to));
+        }
+        moves.push((f, to));
+    }
+    let mut changed: BTreeSet<NotePath> = BTreeSet::new();
+    for (f, to) in moves {
         let now = rename_with_links(vault, cache, &f, &to)?;
         if changed.remove(&f) {
             changed.insert(to.clone());
