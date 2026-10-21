@@ -155,8 +155,11 @@ fn draw_group(
     {
         let mut bar = ui.new_child(
             UiBuilder::new()
-                .max_rect(bar_rect.shrink2(Vec2::new(4.0, 0.0)))
-                .layout(UiLayout::left_to_right(Align::Max)),
+                .max_rect(egui::Rect::from_min_max(
+                    bar_rect.min + Vec2::new(4.0, 5.0),
+                    bar_rect.max - Vec2::new(4.0, 0.0),
+                ))
+                .layout(UiLayout::left_to_right(Align::Min)),
         );
         bar.set_clip_rect(bar_rect.intersect(ui.clip_rect()));
         tab_bar(&mut bar, state, &group, g, focused, actions);
@@ -236,7 +239,7 @@ fn tab_bar(
                             sw: 0,
                             se: 0,
                         })
-                        .inner_margin(Margin::symmetric(10, 5))
+                        .inner_margin(Margin::symmetric(10, 4))
                         .stroke(if is_active {
                             Stroke::new(1.0, pal.border)
                         } else {

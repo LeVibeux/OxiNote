@@ -609,7 +609,11 @@ fn leaf_content(
         None => return,
     };
     match note {
-        None => graph::graph_view(ui, state, i, actions),
+        None => {
+            ui.push_id(("graph-tab", tab_id), |ui| {
+                graph::graph_view(ui, state, i, actions)
+            });
+        }
         Some((path, mode)) => {
             Frame::new()
                 .inner_margin(Margin::symmetric(10, 4))
