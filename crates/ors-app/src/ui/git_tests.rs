@@ -222,11 +222,26 @@ fn restoring_a_version_replaces_the_buffer() {
         let s = app.state.as_mut().expect("vault");
         s.open(&path, OpenIn::CurrentTab);
         s.buffers.get_mut(&path).expect("buffer").text = "# A\nedited\n".into();
-        s.git_restore_text("# A\nv1\n".into());
+        s.git_restore_text(&path, "# A\nv1\n".into());
         assert_eq!(s.buffers[&path].text, "# A\nv1\n");
         assert!(!s.buffers[&path].is_dirty(), "same as the saved file");
     }
     frame(&mut app, &ctx, Vec::new());
+}
+
+#[test]
+fn restoring_a_version_only_touches_the_history_note() {
+    let dir = vault_dir();
+    let mut app = app_on(dir.path());
+    let a = ors_core::NotePath::new("a.md").expect("path");
+    let b = ors_core::NotePath::new("b.md").expect("path");
+    let s = app.state.as_mut().expect("vault");
+    s.open(&a, OpenIn::CurrentTab);
+    s.open(&b, OpenIn::CurrentTab);
+    assert_eq!(s.active_note(), Some(&b), "B is the active note");
+    s.git_restore_text(&a, "# A\nold\n".into());
+    assert_eq!(s.buffers[&a].text, "# A\nold\n");
+    assert_eq!(s.buffers[&b].text, "# B\n", "B untouched");
 }
 
 #[test]

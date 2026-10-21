@@ -837,8 +837,12 @@ pub enum Availability {
 pub enum GitConfirm {
     /// Also stop tracking an already tracked file / folder.
     Untrack { path: String, is_dir: bool },
-    /// Replace the buffer by an old version.
-    Restore { short: String, text: String },
+    /// Replace the buffer of `path` (the note of the history) by an old version.
+    Restore {
+        path: NotePath,
+        short: String,
+        text: String,
+    },
 }
 
 /// State of the "Historique de version" panel.
@@ -1503,16 +1507,15 @@ impl AppState {
         }
     }
 
-    /// Confirmed: replace the buffer of the active note by an old version.
-    pub fn git_restore_text(&mut self, text: String) {
-        let Some(path) = self.active_note().cloned() else {
-            return;
-        };
-        let Some(b) = self.buffers.get_mut(&path) else {
+    /// Confirmed: replace the buffer of `path` by an old version, whatever
+    /// note is active now.
+    pub fn git_restore_text(&mut self, path: &NotePath, text: String) {
+        self.ensure_buffer(path);
+        let Some(b) = self.buffers.get_mut(path) else {
             return;
         };
         b.text = text;
-        self.buffer_edited(&path);
+        self.buffer_edited(path);
         self.info("Version restaurée : elle sera sauvegardée au prochain commit.");
     }
 }
@@ -1890,7 +1893,6 @@ mod tests {
         assert_eq!(file_at(&vault, &log[1].sha, "a.md").unwrap(), "1\n");
         assert_eq!(status_count(&vault).unwrap(), 0, "outside not counted");
     }
-
     #[test]
     fn locked_repository_is_retried_not_failed() {
         require_git!();

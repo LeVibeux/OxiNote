@@ -458,6 +458,7 @@ pub fn history_pane(ui: &mut egui::Ui, state: &mut AppState, path: &NotePath) {
     ui.horizontal(|ui| {
         if ui.button("Restaurer cette version").clicked() {
             state.git.confirm = Some(GitConfirm::Restore {
+                path: path.clone(),
                 short: commit.short().to_string(),
                 text: text.clone(),
             });
@@ -581,6 +582,6 @@ pub fn dialogs(ctx: &egui::Context, state: &mut AppState) {
     }
     match confirm {
         GitConfirm::Untrack { path, .. } => state.git_untrack(&path),
-        GitConfirm::Restore { text, .. } => state.git_restore_text(text),
+        GitConfirm::Restore { path, text, .. } => state.git_restore_text(&path, text),
     }
 }
