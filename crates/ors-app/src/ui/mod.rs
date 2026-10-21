@@ -12,6 +12,7 @@ mod groups;
 mod icons;
 mod modals;
 mod panes;
+mod pdf_view;
 mod properties_view;
 mod reading_view;
 mod settings_ui;
@@ -64,6 +65,8 @@ pub enum Action {
     Props(crate::properties_model::PropAction),
     /// Workspace area (explorer, bookmarks, tab groups).
     Ws(ws_ui::WsAction),
+    /// Open a PDF at a page (1-based).
+    OpenPdf(NotePath, u32, OpenIn),
 }
 
 fn apply(state: &mut AppState, action: Action) {
@@ -89,6 +92,7 @@ fn apply(state: &mut AppState, action: Action) {
         Action::Edited(p) => state.buffer_edited(&p),
         Action::Props(a) => state.apply_prop_action(a),
         Action::Ws(a) => ws_ui::apply(state, a),
+        Action::OpenPdf(p, page, how) => state.open_pdf_at(&p, page, how),
         Action::ShowBacklinks => {
             state.settings.right_open = true;
             state.settings.right_pane = RightPane::Backlinks;
@@ -107,6 +111,7 @@ pub struct UiCaches {
     find: Option<edit::FindUi>,
     explorer: explorer_ui::ExplorerCache,
     embeds: edit_deco::EmbedCache,
+    pdf: pdf_view::PdfCaches,
 }
 
 impl UiCaches {
@@ -182,7 +187,7 @@ pub(crate) fn real_index(vault: &dyn VaultRead) -> Box<dyn IndexBackend> {
     }
 }
 
-fn fake_index(vault: &dyn VaultRead) -> Box<dyn IndexBackend> {
+pub(crate) fn fake_index(vault: &dyn VaultRead) -> Box<dyn IndexBackend> {
     Box::new(FakeIndex::build(vault))
 }
 
@@ -638,6 +643,10 @@ fn leaf_content(
             {
                 editor::conflict_banner(ui, &path, actions);
             }
+            if crate::pdf::is_pdf(&path) {
+                pdf_view::pdf_tab(ui, state, caches, tab_id, &path, actions);
+                return;
+            }
             let scroll_to = if mode == ViewMode::Reading {
                 crate::views::take_pending_line(state)
             } else {
@@ -710,6 +719,7 @@ impl ObsiApp {
         let caches = &mut self.caches;
         state.tick(self.start.elapsed().as_secs_f64());
         state.poll_vault();
+        caches.pdf.gc(ctx.input(|i| i.time));
         let mut actions: Vec<Action> = Vec::new();
 
         // Shortcuts (shared with the palette through the registry).

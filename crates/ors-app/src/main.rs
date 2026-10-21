@@ -20,6 +20,7 @@ mod fake;
 mod graph_model;
 mod highlight;
 mod hotkeys;
+mod pdf;
 mod plugins;
 mod properties_model;
 mod reading;

@@ -151,6 +151,11 @@ pub struct SavedViewState {
     /// "source" or "preview".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
+    /// PDF tabs: current page (1-based) and zoom (absent = fit width).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zoom: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -228,11 +233,13 @@ fn right_pane_from(s: &str) -> RightPane {
     }
 }
 
-fn save_tab(tab: &Tab, pinned: bool) -> SavedLeaf {
+fn save_tab(tab: &Tab, pinned: bool, pdf: Option<&crate::pdf::PdfViewState>) -> SavedLeaf {
     let state = match &tab.content {
         TabContent::Note(n) => SavedView {
             kind: if n.path.is_markdown() {
                 "markdown".into()
+            } else if crate::pdf::is_pdf(&n.path) {
+                "pdf".into()
             } else {
                 "file".into()
             },
@@ -245,6 +252,8 @@ fn save_tab(tab: &Tab, pinned: bool) -> SavedLeaf {
                     }
                     .into(),
                 ),
+                page: pdf.map(|p| p.page),
+                zoom: pdf.and_then(|p| p.saved_zoom()),
             },
         },
         TabContent::Graph(g) => SavedView {
@@ -256,6 +265,8 @@ fn save_tab(tab: &Tab, pinned: bool) -> SavedLeaf {
             state: SavedViewState {
                 file: g.center.as_ref().map(|c| c.as_str().to_string()),
                 mode: None,
+                page: None,
+                zoom: None,
             },
         },
     };
@@ -403,7 +414,7 @@ impl AppState {
                 let children: Vec<SavedLeaf> = ids
                     .iter()
                     .filter_map(|id| self.tabs.iter().find(|t| t.id == *id))
-                    .map(|t| save_tab(t, self.ws.layout.is_pinned(t.id)))
+                    .map(|t| save_tab(t, self.ws.layout.is_pinned(t.id), self.pdf_views.get(&t.id)))
                     .collect();
                 let current_tab = group
                     .and_then(|g| g.active)
@@ -632,8 +643,22 @@ impl AppState {
                 })
             }
         };
+        let pdf = match &content {
+            TabContent::Note(n) if crate::pdf::is_pdf(&n.path) => {
+                Some(crate::pdf::PdfViewState::restored(
+                    n.path.clone(),
+                    leaf.state.state.page,
+                    leaf.state.state.zoom,
+                ))
+            }
+            _ => None,
+        };
         let i = self.push_tab(content);
-        self.tabs.get(i).map(|t| t.id)
+        let id = self.tabs.get(i).map(|t| t.id)?;
+        if let Some(v) = pdf {
+            self.pdf_views.insert(id, v);
+        }
+        Some(id)
     }
 
     /// Point `active` at the focused group's active tab.

@@ -569,6 +569,11 @@ fn draw_inline(
                         OpenIn::CurrentTab
                     };
                     let line = heading_line(cx, resolved.as_ref(), subpath.as_ref());
+                    if let Some(p) = resolved.as_ref().filter(|p| crate::pdf::is_pdf(p)) {
+                        let page = crate::pdf::params_from_link(subpath.as_ref(), None).page;
+                        actions.push(Action::OpenPdf(p.clone(), page.unwrap_or(1), open_in));
+                        return;
+                    }
                     match (resolved, line) {
                         (Some(p), Some(line)) if target.is_empty() || p != cx.path => {
                             actions.push(Action::OpenLine(p.clone(), line, open_in));
@@ -680,6 +685,7 @@ fn draw_embed(
         target,
         subpath,
         resolved,
+        display,
         ..
     }) = ref_index(url).and_then(|i| cx.prepared.refs.get(i))
     else {
@@ -722,6 +728,11 @@ fn draw_embed(
                 ui.label(RichText::new(format!("⚠ cannot load {path}")).color(pal.unresolved));
             }
         }
+        return;
+    }
+    if crate::pdf::is_pdf(path) {
+        let params = crate::pdf::params_from_link(subpath.as_ref(), display.as_deref());
+        super::pdf_view::pdf_embed(ui, cx.state, caches, path, &params, actions);
         return;
     }
     if !path.is_markdown() {

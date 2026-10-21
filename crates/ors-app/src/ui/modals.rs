@@ -175,7 +175,12 @@ fn quick_switcher(
         state
             .recent_files
             .iter()
-            .chain(state.files.iter().filter(|f| f.is_markdown()))
+            .chain(
+                state
+                    .files
+                    .iter()
+                    .filter(|f| f.is_markdown() || crate::pdf::is_pdf(f)),
+            )
             .fold(Vec::new(), |mut acc: Vec<ors_core::NotePath>, p| {
                 if !acc.contains(p) {
                     acc.push(p.clone());
@@ -189,8 +194,10 @@ fn quick_switcher(
     } else {
         state
             .index
-            .fuzzy_find(&query, 30)
+            .fuzzy_find_files(&query, 200, true)
             .into_iter()
+            .filter(|(p, _, _)| p.is_markdown() || crate::pdf::is_pdf(p))
+            .take(30)
             .map(|(p, a, _)| (p, a))
             .collect()
     };
