@@ -247,7 +247,13 @@ impl AppState {
                 self.save_vault_settings();
             }
             c if is_editor_command(c) => {
-                let mode = self.active_tab().and_then(|t| t.note()).map(|n| n.mode);
+                // Only notes take editor commands: nothing drains them in a
+                // PDF or image tab, even one in reading mode.
+                let mode = self
+                    .active_tab()
+                    .and_then(|t| t.note())
+                    .filter(|n| n.path.is_markdown())
+                    .map(|n| n.mode);
                 // The reading view only takes the find bar.
                 let find = matches!(c, Command::FindInNote | Command::ReplaceInNote);
                 if mode == Some(crate::state::ViewMode::Source)

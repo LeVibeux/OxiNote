@@ -934,3 +934,23 @@ fn ctrl_f_searches_the_reading_view() {
     frames(&mut app, &ctx, 2);
     assert!(app.caches.find.is_none());
 }
+
+#[test]
+fn ctrl_f_on_an_attachment_in_reading_mode_is_ignored() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    state(&mut app).settings.default_reading_view = true;
+    let img = NotePath::new("attachments/diagramme.png").expect("path");
+    state(&mut app).open(&img, OpenIn::CurrentTab);
+    frames(&mut app, &ctx, 2);
+    let mode = state(&mut app)
+        .active_tab()
+        .and_then(|t| t.note())
+        .map(|n| n.mode);
+    assert_eq!(mode, Some(ViewMode::Reading));
+    frame(&mut app, &ctx, vec![key(Key::F, Modifiers::COMMAND)]);
+    frames(&mut app, &ctx, 2);
+    // Nothing would ever take it: it must not stay pending.
+    assert!(state(&mut app).editor.pending.is_empty());
+    assert!(app.caches.find.is_none());
+}
