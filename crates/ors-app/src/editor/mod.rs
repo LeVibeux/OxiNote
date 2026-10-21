@@ -88,8 +88,8 @@ pub struct EditorState {
     pub toggled_tabs: HashSet<TabId>,
     /// Folded headings / list items per tab.
     pub folds: std::collections::HashMap<TabId, Vec<fold::FoldKey>>,
-    /// Tabs whose `[!type]-` callouts were already folded on opening.
-    pub callout_seeded: HashSet<TabId>,
+    /// (tab, note) pairs whose `[!type]-` callouts were already folded on opening.
+    pub callout_seeded: HashSet<(TabId, ors_core::NotePath)>,
 }
 
 impl EditorState {

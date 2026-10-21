@@ -1045,7 +1045,7 @@ fn edit_body(
         }
     }
     // `> [!type]-` callouts start folded.
-    if live && state.editor.callout_seeded.insert(tab_id) {
+    if live && state.editor.callout_seeded.insert((tab_id, path.clone())) {
         let d = decorate(text);
         let keys: Vec<fold::FoldKey> = d
             .folds

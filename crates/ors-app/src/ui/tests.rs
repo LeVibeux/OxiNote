@@ -494,6 +494,22 @@ fn fold_all_hides_sections_and_unfold_all_restores_them() {
 }
 
 #[test]
+fn folded_callouts_are_reapplied_when_the_tab_changes_note() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("callout-nav");
+    open_with_text(&mut app, &ctx, "Un.md", "just text\n");
+    let tab = state(&mut app).active_tab().expect("tab").id;
+    // Same tab, other note.
+    open_with_text(&mut app, &ctx, "Deux.md", "> [!note]- Titre\n> corps\n");
+    assert_eq!(state(&mut app).active_tab().expect("tab").id, tab);
+    assert_eq!(
+        state(&mut app).editor.folds.get(&tab).map(Vec::len),
+        Some(1),
+        "the callout of the second note starts folded"
+    );
+}
+
+#[test]
 fn images_and_line_numbers_render_without_touching_the_text() {
     let ctx = egui::Context::default();
     let (mut app, dir) = real_app("images");
