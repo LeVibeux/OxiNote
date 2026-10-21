@@ -13,6 +13,8 @@ use super::live::{LineInfo, LineKind};
 pub enum FoldKind {
     Heading,
     List,
+    /// `> [!type]-` / `> [!type]+`: the body lines.
+    Callout,
 }
 
 /// A foldable block: line `start` stays visible, lines `start + 1 ..= end`
@@ -70,6 +72,27 @@ pub fn fold_ranges(text: &str, lines: &[LineInfo]) -> Vec<FoldRange> {
                     });
                 }
             }
+            LineKind::Callout { header: true, .. } => {
+                if callout_marker(src[i]).is_none() {
+                    continue;
+                }
+                let mut end = i;
+                while end + 1 < lines.len()
+                    && matches!(
+                        &lines[end + 1].kind,
+                        LineKind::Callout { header: false, .. }
+                    )
+                {
+                    end += 1;
+                }
+                if end > i {
+                    out.push(FoldRange {
+                        start: i,
+                        end,
+                        kind: FoldKind::Callout,
+                    });
+                }
+            }
             LineKind::Normal => {
                 let Some(p) = parse_prefix(src[i]) else {
                     continue;
@@ -102,6 +125,18 @@ pub fn fold_ranges(text: &str, lines: &[LineInfo]) -> Vec<FoldRange> {
         }
     }
     out
+}
+
+/// The fold marker of a callout header line: `Some('-')` (folded by
+/// default) or `Some('+')` (open); `None` for a plain callout.
+pub fn callout_marker(line: &str) -> Option<char> {
+    let rest = line.trim_start().strip_prefix('>')?.trim_start();
+    let rest = rest.strip_prefix("[!")?;
+    let close = rest.find(']')?;
+    rest[close + 1..]
+        .chars()
+        .next()
+        .filter(|c| matches!(c, '-' | '+'))
 }
 
 fn header_text<'a>(text: &'a str, lines: &[LineInfo], start: usize) -> &'a str {

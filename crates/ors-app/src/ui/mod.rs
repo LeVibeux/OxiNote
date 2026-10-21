@@ -4,6 +4,7 @@
 
 mod dialogs;
 mod edit;
+mod edit_blocks;
 mod edit_deco;
 mod editor;
 mod explorer_ui;
@@ -34,6 +35,7 @@ use ors_core::{NotePath, VaultRead};
 
 use crate::backend::{DiskVault, IndexBackend, RealIndex};
 use crate::commands::Command;
+use crate::editor::DisplayMode;
 use crate::fake::{FakeIndex, demo_vault};
 use crate::settings::{LeftPane, RecentVaults, RightPane, Settings, ThemeChoice};
 use crate::state::{AppState, Modal, OpenIn, TabId, ToastKind, ViewMode};
@@ -64,6 +66,8 @@ pub enum Action {
     Props(crate::properties_model::PropAction),
     /// Workspace area (explorer, bookmarks, tab groups).
     Ws(ws_ui::WsAction),
+    /// Switch the active note between Live Preview, Source and Reading.
+    SetMode(crate::editor::DisplayMode),
 }
 
 fn apply(state: &mut AppState, action: Action) {
@@ -89,6 +93,7 @@ fn apply(state: &mut AppState, action: Action) {
         Action::Edited(p) => state.buffer_edited(&p),
         Action::Props(a) => state.apply_prop_action(a),
         Action::Ws(a) => ws_ui::apply(state, a),
+        Action::SetMode(m) => state.set_display_mode(m),
         Action::ShowBacklinks => {
             state.settings.right_open = true;
             state.settings.right_pane = RightPane::Backlinks;
@@ -134,6 +139,8 @@ pub struct Startup {
     pub frames: u64,
     pub open: Vec<String>,
     pub reading: bool,
+    /// Open notes in Source mode (`--source`, screenshots).
+    pub source: bool,
     pub graph: bool,
     /// Open the graph settings panel (screenshots).
     pub graph_panel: bool,
@@ -286,6 +293,9 @@ impl ObsiApp {
             }
             if s.reading {
                 state.toggle_mode();
+            }
+            if s.source {
+                state.set_display_mode(DisplayMode::Source);
             }
             if s.fold_all {
                 state.editor.pending.push(Command::FoldAll);
@@ -565,9 +575,42 @@ fn view_header(ui: &mut egui::Ui, state: &AppState, actions: &mut Vec<Action>) {
         ui.label(RichText::new(crumbs).color(pal.muted));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if note.path.is_markdown() {
-                let (icon, tip) = match note.mode {
-                    ViewMode::Source => (icons::BOOK_OPEN, "Reading view (Ctrl+E)"),
-                    ViewMode::Reading => (icons::PENCIL, "Editing view (Ctrl+E)"),
+                let mode = state.display_mode().unwrap_or(DisplayMode::LivePreview);
+                let more = ui.add(
+                    egui::Button::new(icons::text(icons::DOTS_THREE, 16.0).color(pal.muted))
+                        .frame(false),
+                );
+                egui::Popup::menu(&more).show(|ui| {
+                    ui.set_min_width(170.0);
+                    if ui
+                        .selectable_label(mode == DisplayMode::Source, "Source mode")
+                        .clicked()
+                    {
+                        let to = if mode == DisplayMode::Source {
+                            DisplayMode::LivePreview
+                        } else {
+                            DisplayMode::Source
+                        };
+                        actions.push(Action::SetMode(to));
+                        ui.close();
+                    }
+                    if ui
+                        .selectable_label(mode == DisplayMode::Reading, "Reading view")
+                        .clicked()
+                    {
+                        let to = if mode == DisplayMode::Reading {
+                            DisplayMode::LivePreview
+                        } else {
+                            DisplayMode::Reading
+                        };
+                        actions.push(Action::SetMode(to));
+                        ui.close();
+                    }
+                });
+                more.on_hover_text("More options");
+                let (icon, tip) = match mode {
+                    DisplayMode::Reading => (icons::PENCIL, "Current view: reading. Edit (Ctrl+E)"),
+                    _ => (icons::BOOK_OPEN, "Current view: editing. Read (Ctrl+E)"),
                 };
                 if ui
                     .add(egui::Button::new(icons::text(icon, 16.0).color(pal.muted)).frame(false))
@@ -655,7 +698,9 @@ fn leaf_content(
                     } else if mode == ViewMode::Reading {
                         reading_view::reading_view(ui, state, caches, &path, scroll_to, actions);
                     } else {
-                        if crate::properties_model::panel_visible(&state.settings) {
+                        if crate::properties_model::panel_visible(&state.settings)
+                            && state.display_mode() != Some(DisplayMode::Source)
+                        {
                             editor::readable_column(
                                 ui,
                                 state.settings.readable_line_length,

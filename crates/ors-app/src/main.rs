@@ -62,6 +62,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
             "--demo" => s.demo = true,
             "--fresh" => s.fresh = true,
             "--reading" => s.reading = true,
+            "--source" => s.source = true,
             "--graph" => s.graph = true,
             "--graph-panel" => s.graph_panel = true,
             "--palette" => s.palette = true,
