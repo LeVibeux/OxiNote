@@ -968,7 +968,7 @@ mod tests {
             .apply_edit(&other, |t| props::set_property(t, "k", &json!("v")))
             .expect("edit");
         assert!(changed);
-        assert!(s.buffers.get(&other).is_none());
+        assert!(!s.buffers.contains_key(&other));
         assert!(
             s.vault
                 .read_to_string(&other)
