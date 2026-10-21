@@ -653,7 +653,8 @@ fn leaf_content(
                                 ui,
                                 state.settings.readable_line_length,
                                 |ui| {
-                                    properties_view::panel(ui, state, &path, "doc", true, actions);
+                                    let scope = format!("doc{tab_id}");
+                                    properties_view::panel(ui, state, &path, &scope, true, actions);
                                 },
                             );
                         }
