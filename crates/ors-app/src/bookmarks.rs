@@ -268,6 +268,46 @@ impl Bookmarks {
         }
     }
 
+    /// Set the title of the item at `path`. An empty title clears it (not
+    /// for groups, which keep their previous title).
+    pub fn rename_item(&mut self, path: &[usize], title: &str) -> bool {
+        let Some((last, parent)) = path.split_last() else {
+            return false;
+        };
+        let Some(item) = self.list_mut(parent).and_then(|l| l.get_mut(*last)) else {
+            return false;
+        };
+        let title = title.trim();
+        if title.is_empty() {
+            if item.is_group() {
+                return false;
+            }
+            item.title = None;
+        } else {
+            item.title = Some(title.to_string());
+        }
+        true
+    }
+
+    /// Delete the group at `path`; its items take its place in the parent.
+    pub fn ungroup(&mut self, path: &[usize]) -> bool {
+        let Some((last, parent)) = path.split_last() else {
+            return false;
+        };
+        let Some(list) = self.list_mut(parent) else {
+            return false;
+        };
+        if !list.get(*last).is_some_and(Bookmark::is_group) {
+            return false;
+        }
+        let group = list.remove(*last);
+        let children = group.items.unwrap_or_default();
+        for (k, c) in children.into_iter().enumerate() {
+            list.insert(*last + k, c);
+        }
+        true
+    }
+
     /// Update paths after a file rename.
     pub fn rename_file(&mut self, from: &str, to: &str) {
         Self::visit_mut(&mut self.items, &mut |b| {
@@ -353,6 +393,26 @@ mod tests {
         assert_eq!(b.items.len(), 2);
         let json = b.to_json();
         assert!(json.contains("\"items\": []"), "{json}");
+    }
+
+    #[test]
+    fn rename_and_ungroup() {
+        let mut b = Bookmarks::from_json(OBSIDIAN);
+        assert!(b.rename_item(&[2], "Travail"));
+        assert_eq!(b.items[2].label(), "Travail");
+        assert!(!b.rename_item(&[2], "  "), "groups keep a title");
+        assert!(b.rename_item(&[2, 0], "Projets!"));
+        assert_eq!(b.get(&[2, 0]).unwrap().label(), "Projets!");
+        assert!(b.rename_item(&[2, 0], ""));
+        assert_eq!(b.get(&[2, 0]).unwrap().label(), "Projets");
+        assert!(!b.ungroup(&[0]), "only groups");
+        assert!(b.ungroup(&[2]));
+        // [file, file#h, folder, search, graph]
+        assert_eq!(b.items.len(), 5);
+        assert_eq!(b.items[2].kind, "folder");
+        assert_eq!(b.items[3].kind, "search");
+        assert_eq!(b.items[4].kind, "graph");
+        assert!(b.to_json().contains("\"rev\": 3"));
     }
 
     #[test]

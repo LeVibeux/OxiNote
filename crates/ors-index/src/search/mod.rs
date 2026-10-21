@@ -295,8 +295,8 @@ impl Eval<'_> {
         match node {
             Node::Text { raw, folded } => self.text(raw, folded, scope, cs, out),
             Node::Regex { ci, cs: csr } => self.regex(if cs { csr } else { ci }, scope, out),
-            Node::Tag(k) => self.tag(k, scope),
-            Node::Property { name, value } => self.property(name, value.as_deref(), cs),
+            Node::Tag(k) => self.tag(k, scope, out),
+            Node::Property { name, value } => self.property(name, value.as_deref(), cs, out),
             Node::Scoped(op, child) => self.scoped(*op, child, scope, cs, out),
             Node::And(children) => {
                 let mut local = Out::default();
@@ -408,20 +408,53 @@ impl Eval<'_> {
         }
     }
 
-    fn tag(&self, k: &str, scope: Scope<'_>) -> bool {
-        match scope {
-            Scope::Range(s, e) => self.cache.get(&self.doc.path).is_some_and(|n| {
-                n.tags.iter().any(|t| {
-                    let tk = tag_key(&t.name);
-                    let hit = tk == k || tk.starts_with(&format!("{k}/"));
-                    hit && t.span.start >= s && t.span.start < e.max(s + 1)
-                })
-            }),
-            _ => self.cache.has_tag(&self.doc.path, k),
+    fn tag(&self, k: &str, scope: Scope<'_>, out: &mut Out) -> bool {
+        let Some(note) = self.cache.get(&self.doc.path) else {
+            return false;
+        };
+        let (lo, hi) = match scope {
+            Scope::Range(s, e) => (s, e.max(s + 1)),
+            _ => (0, usize::MAX),
+        };
+        let mut found = false;
+        for t in &note.tags {
+            let tk = tag_key(&t.name);
+            let hit = tk == k || tk.starts_with(&format!("{k}/"));
+            if hit && t.span.start >= lo && t.span.start < hi {
+                found = true;
+                if t.span.start < t.span.end && t.span.end <= self.doc.source.len() {
+                    out.hits.push((t.span.start, t.span.end));
+                }
+            }
         }
+        found
     }
 
-    fn property(&self, name: &str, value: Option<&Node>, cs: bool) -> bool {
+    /// Byte range of the `name:` line in the frontmatter, if present.
+    fn property_line(&self, name: &str) -> Option<(usize, usize)> {
+        let span = self.cache.get(&self.doc.path)?.frontmatter_span?;
+        let src = &self.doc.source;
+        let first = text::line_of(&self.doc.line_starts, span.start);
+        for i in first..self.doc.line_starts.len() {
+            let (ls, le) = self.doc.line_range(i);
+            if ls >= span.end {
+                break;
+            }
+            let line = &src[ls..le];
+            if line.starts_with(char::is_whitespace) || line.starts_with("---") {
+                continue;
+            }
+            let Some((k, _)) = line.split_once(':') else {
+                continue;
+            };
+            if key(k.trim().trim_matches(['"', '\''])) == name {
+                return Some((ls, ls + line.trim_end().len()));
+            }
+        }
+        None
+    }
+
+    fn property(&self, name: &str, value: Option<&Node>, cs: bool, out: &mut Out) -> bool {
         let Some(fm) = self
             .cache
             .get(&self.doc.path)
@@ -436,23 +469,27 @@ impl Eval<'_> {
         else {
             return false;
         };
-        let Some(value) = value else {
-            return true;
-        };
-        let mut strings = Vec::new();
-        flatten_value(v, &mut strings);
-        strings.iter().any(|s| {
-            let f = Folded::new(s).text;
-            self.eval(
-                value,
-                Scope::Text {
-                    orig: s,
-                    folded: &f,
-                },
-                cs,
-                &mut Out::default(),
-            )
-        })
+        let mut matched = true;
+        if let Some(value) = value {
+            let mut strings = Vec::new();
+            flatten_value(v, &mut strings);
+            matched = strings.iter().any(|s| {
+                let f = Folded::new(s).text;
+                self.eval(
+                    value,
+                    Scope::Text {
+                        orig: s,
+                        folded: &f,
+                    },
+                    cs,
+                    &mut Out::default(),
+                )
+            });
+        }
+        if matched && let Some(r) = self.property_line(name) {
+            out.hits.push(r);
+        }
+        matched
     }
 
     fn sub_ranges(

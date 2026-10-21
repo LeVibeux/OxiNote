@@ -3,6 +3,8 @@
 
 use eframe::egui::{self, RichText, Sense};
 
+use ors_core::NotePath;
+
 use super::theme::Palette;
 use super::{Action, UiCaches};
 use crate::commands::Command;
@@ -10,7 +12,12 @@ use crate::settings::{LeftPane, RightPane};
 use crate::state::{AppState, OpenIn, ViewMode};
 
 pub(super) fn open_in_from(ui: &egui::Ui, resp: &egui::Response) -> OpenIn {
-    if resp.middle_clicked() || ui.input(|i| i.modifiers.command) {
+    let m = ui.input(|i| i.modifiers);
+    if m.command && m.alt && m.shift {
+        OpenIn::SplitDown
+    } else if m.command && m.alt {
+        OpenIn::SplitRight
+    } else if resp.middle_clicked() || m.command {
         OpenIn::NewTab
     } else {
         OpenIn::CurrentTab
@@ -150,7 +157,7 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
         super::graph::local_graph_pane(ui, state, actions);
         return;
     }
-    let Some(path) = state.active_note().cloned() else {
+    let Some(path) = side_note(state) else {
         ui.label(RichText::new("No file is open.").color(pal.muted));
         return;
     };
@@ -168,6 +175,25 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
 // ---------------------------------------------------------------------------
 // Tab bar & status bar
 // ---------------------------------------------------------------------------
+
+/// Note shown by the right sidebar: the active note, or, when a graph tab is
+/// active, the last active note that is still open in a tab (like Obsidian).
+fn side_note(state: &AppState) -> Option<NotePath> {
+    if let Some(p) = state.active_note() {
+        return Some(p.clone());
+    }
+    state.active_tab()?;
+    state
+        .recent_files
+        .iter()
+        .find(|p| {
+            state
+                .tabs
+                .iter()
+                .any(|t| t.note().is_some_and(|n| &n.path == *p))
+        })
+        .cloned()
+}
 
 pub fn status_bar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Action>) {
     let pal = Palette::of(ui.ctx());
