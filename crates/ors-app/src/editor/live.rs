@@ -7,6 +7,8 @@
 
 use std::ops::Range;
 
+use super::embeds::{ImageRef, image_line};
+use super::fold::{FoldRange, fold_ranges};
 use super::format::{ListKind, parse_prefix};
 use crate::highlight::{Style, highlight};
 
@@ -78,7 +80,7 @@ pub struct LinkSpan {
     pub target: LinkTarget,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Decor {
     pub lines: Vec<LineInfo>,
     /// Sorted, non-overlapping; `.2` is the line index.
@@ -86,6 +88,10 @@ pub struct Decor {
     /// With their line index.
     pub widgets: Vec<(Widget, usize)>,
     pub links: Vec<LinkSpan>,
+    /// Lines holding only a local image embed, with the image.
+    pub images: Vec<(usize, ImageRef)>,
+    /// Foldable headings and list items.
+    pub folds: Vec<FoldRange>,
 }
 
 impl Decor {
@@ -173,6 +179,12 @@ pub fn decorate(text: &str) -> Decor {
                 .filter(|(r, _)| !r.is_empty())
                 .collect();
             decorate_line(text, n, &mut info, &line_spans, &mut callout, &mut d);
+            if info.kind == LineKind::Normal
+                && !line_spans.first().is_some_and(|(_, s)| s.comment)
+                && let Some(img) = image_line(content)
+            {
+                d.images.push((n, img));
+            }
         }
         if !matches!(info.kind, LineKind::Quote | LineKind::Callout { .. }) {
             callout = None;
@@ -181,6 +193,7 @@ pub fn decorate(text: &str) -> Decor {
         off += raw.len();
     }
     d.conceals.sort_by_key(|(r, _, _)| r.start);
+    d.folds = fold_ranges(text, &d.lines);
     d
 }
 
@@ -484,6 +497,20 @@ mod tests {
         assert!(s.contains("\n···\n```rust"), "rule blanked: {s}");
         assert_eq!(d.line_at(0), 0);
         assert_eq!(d.line_at(t.find("corps").unwrap()), 4);
+    }
+
+    #[test]
+    fn image_lines_and_folds() {
+        let t = "# T\n![[a.png|200]]\ntexte ![[b.png]]\n```\n![[c.png]]\n```\n![](d.jpg)\n";
+        let d = decorate(t);
+        let imgs: Vec<_> = d
+            .images
+            .iter()
+            .map(|(l, i)| (*l, i.target.as_str()))
+            .collect();
+        assert_eq!(imgs, vec![(1, "a.png"), (6, "d.jpg")]);
+        assert_eq!(d.folds.len(), 1);
+        assert_eq!((d.folds[0].start, d.folds[0].end), (0, 6));
     }
 
     #[test]

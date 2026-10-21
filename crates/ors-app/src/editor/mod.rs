@@ -7,7 +7,9 @@
 //! [`byte_to_char`].
 
 pub mod completion;
+pub mod embeds;
 pub mod find;
+pub mod fold;
 pub mod format;
 pub mod live;
 
@@ -82,6 +84,8 @@ pub struct EditorState {
     /// Tabs whose editing mode differs from the default
     /// (`Settings::live_preview`).
     pub toggled_tabs: HashSet<TabId>,
+    /// Folded headings / list items per tab.
+    pub folds: std::collections::HashMap<TabId, Vec<fold::FoldKey>>,
 }
 
 impl EditorState {

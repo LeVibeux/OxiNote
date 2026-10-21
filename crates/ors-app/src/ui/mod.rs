@@ -4,6 +4,7 @@
 
 mod dialogs;
 mod edit;
+mod edit_deco;
 mod editor;
 mod explorer_ui;
 mod graph;
@@ -105,6 +106,7 @@ pub struct UiCaches {
     completion: Option<edit::CompletionUi>,
     find: Option<edit::FindUi>,
     explorer: explorer_ui::ExplorerCache,
+    embeds: edit_deco::EmbedCache,
 }
 
 impl UiCaches {
