@@ -2,7 +2,7 @@
 
 | Fichier | Usage |
 |---|---|
-| `obsirust-logo.jpg` | Illustration originale (1408×1408), source de tous les autres fichiers |
+| `obsirust-logo.jpg` | Illustration originale (784×1168, page de métal rouillé), source de tous les autres fichiers |
 | `obsirust-icon.png` | Icône d'application 1024×1024, coins arrondis, fond transparent |
 | `obsirust-icon-{16,32,48,64,128,256,512}.png` | Icône déclinée par taille (16–48 recadrées plus serré pour rester lisibles) |
 | `obsirust.ico` | Icône Windows multi-tailles (16 à 256) |
