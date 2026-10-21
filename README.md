@@ -1,4 +1,8 @@
-# ObsiRust
+<p align="center">
+  <img src="assets/logo/obsirust-icon-256.png" alt="Logo ObsiRust" width="160">
+</p>
+
+<h1 align="center">ObsiRust</h1>
 
 Réimplémentation d'Obsidian en Rust, compatible avec les vaults existants.
 
