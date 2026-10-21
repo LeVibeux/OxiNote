@@ -1,16 +1,24 @@
 name: Release
 
-# Push a tag like `v0.1.0` (or `v0.1.0-rc.1` for a pre-release) to build the
-# app and the CLI for Linux, macOS and Windows and publish a GitHub release.
+# Builds the app and the CLI for Linux, macOS and Windows and publishes a
+# GitHub release. Either push a tag like `v0.1.0` (`v0.1.0-rc.1` for a
+# pre-release), or run this workflow by hand (Actions > Release > Run
+# workflow) with the version: the tag is then created on the chosen commit.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, e.g. v0.1.0 (v0.1.0-rc.1 for a pre-release)"
+        required: true
 
 permissions:
   contents: write
 
 env:
   CARGO_TERM_COLOR: always
+  TAG: ${{ inputs.version || github.ref_name }}
 
 jobs:
   build:
@@ -29,6 +37,10 @@ jobs:
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Check version
+        shell: bash
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "invalid version: $TAG"; exit 1; }
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -43,7 +55,7 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          name="obsirust-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          name="obsirust-${TAG}-${{ matrix.target }}"
           mkdir -p "$name"
           cp target/${{ matrix.target }}/release/obsirust-app target/${{ matrix.target }}/release/obsirust "$name/"
           cp assets/linux/obsirust.desktop "$name/"
@@ -56,8 +68,8 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          name="obsirust-${GITHUB_REF_NAME}-${{ matrix.target }}"
-          version="${GITHUB_REF_NAME#v}"
+          name="obsirust-${TAG}-${{ matrix.target }}"
+          version="${TAG#v}"
           app="$name/ObsiRust.app"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
           cp target/${{ matrix.target }}/release/obsirust-app "$app/Contents/MacOS/"
@@ -100,7 +112,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $name = "obsirust-$env:GITHUB_REF_NAME-${{ matrix.target }}"
+          $name = "obsirust-$env:TAG-${{ matrix.target }}"
           New-Item -ItemType Directory -Path $name | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/obsirust-app.exe" $name
           Copy-Item "target/${{ matrix.target }}/release/obsirust.exe" $name
@@ -127,8 +139,11 @@ jobs:
         run: cd dist && sha256sum * > SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: ObsiRust ${{ env.TAG }}
           files: dist/*
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(env.TAG, '-') }}
           generate_release_notes: true
           body: |
             ## Installation

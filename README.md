@@ -14,7 +14,8 @@ Téléchargez l'archive de votre système dans les
 [Releases](https://github.com/LeVibeux/ObsiRust/releases) (macOS Apple Silicon et
 Intel, Windows, Linux). Elle contient l'application et le CLI `obsirust`.
 
-Pour publier une version : poussez un tag `vX.Y.Z` ; le workflow
+Pour publier une version : onglet *Actions* → *Release* → *Run workflow*, avec la
+version (`v0.1.0`), ou poussez un tag `vX.Y.Z`. Le workflow
 `.github/workflows/release.yml` compile et publie la release.
 
 ## Développement
