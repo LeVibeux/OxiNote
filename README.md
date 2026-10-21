@@ -18,9 +18,11 @@ Sur Ubuntu / Debian, installez le paquet `.deb` (double-clic, ou
 `sudo apt install ./obsirust_<version>_amd64.deb`) : ObsiRust apparaît dans le menu
 des applications et `obsirust` est disponible dans le terminal.
 
-Pour publier une version : onglet *Actions* → *Release* → *Run workflow*, avec la
-version (`v0.1.0`), ou poussez un tag `vX.Y.Z`. Le workflow
-`.github/workflows/release.yml` compile et publie la release.
+Pour publier une version : mettez d'abord à jour `version` dans `Cargo.toml`
+(`[workspace.package]`), puis onglet *Actions* → *Release* → *Run workflow* avec la
+même version (`v0.1.0`, ou `v0.1.0-rc.1` pour une pré-release), ou poussez un tag
+`vX.Y.Z`. Le workflow `.github/workflows/release.yml` vérifie la version, compile et
+publie la release.
 
 ## Développement
 

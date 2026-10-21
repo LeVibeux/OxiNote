@@ -39,11 +39,20 @@ jobs:
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
     steps:
+      - uses: actions/checkout@v4
       - name: Check version
         shell: bash
         run: |
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "invalid version: $TAG"; exit 1; }
-      - uses: actions/checkout@v4
+          # The binaries report the workspace version (`--version`, About page):
+          # the tag must match it. A pre-release suffix (-rc.1) is allowed for
+          # candidates of that same version.
+          cargo_version=$(sed -n '/^\[workspace.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p;}' Cargo.toml)
+          base=${TAG#v}; base=${base%%-*}
+          [[ "$base" == "$cargo_version" ]] || {
+            echo "tag $TAG does not match the workspace version $cargo_version in Cargo.toml: bump it first"
+            exit 1
+          }
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -72,7 +81,9 @@ jobs:
         shell: bash
         run: |
           name="obsirust-${TAG}-${{ matrix.target }}"
+          # Apple wants three dot-separated integers: drop any -rc suffix.
           version="${TAG#v}"
+          version="${version%%-*}"
           app="$name/ObsiRust.app"
           mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
           cp target/${{ matrix.target }}/release/obsirust-app "$app/Contents/MacOS/"
