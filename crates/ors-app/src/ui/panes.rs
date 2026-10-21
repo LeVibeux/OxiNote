@@ -141,6 +141,14 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
         ) {
             state.settings.right_pane = RightPane::FileProperties;
         }
+        if pane_tab(
+            ui,
+            cur == RightPane::History,
+            super::git_ui::HISTORY,
+            "Historique de version",
+        ) {
+            state.settings.right_pane = RightPane::History;
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui
                 .small_button("↗")
@@ -168,6 +176,7 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
         RightPane::FileProperties => {
             super::properties_view::panel(ui, state, &path, "side", false, actions);
         }
+        RightPane::History => super::git_ui::history_pane(ui, state, &path),
         RightPane::LocalGraph => {}
     }
 }
@@ -235,5 +244,6 @@ pub fn status_bar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Act
                 None => ui.label(small(String::new())),
             };
         }
+        super::git_ui::status_item(ui, state, actions);
     });
 }

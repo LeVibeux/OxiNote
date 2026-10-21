@@ -2887,6 +2887,7 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

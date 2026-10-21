@@ -102,6 +102,7 @@ fn page_title(p: SettingsPage) -> &'static str {
         SettingsPage::CorePlugins => "Core plugins",
         SettingsPage::DailyNotes => "Daily notes",
         SettingsPage::Templates => "Templates",
+        SettingsPage::GitBackup => "Sauvegarde (Git)",
         SettingsPage::About => "About",
     }
 }
@@ -147,6 +148,7 @@ fn categories(ui: &mut egui::Ui, state: &AppState, win: &mut SettingsWindow) {
     item(ui, win, SettingsPage::Appearance, icons::BRUSH);
     item(ui, win, SettingsPage::Hotkeys, icons::KEYBOARD);
     item(ui, win, SettingsPage::CorePlugins, icons::PLUG);
+    item(ui, win, SettingsPage::GitBackup, super::git_ui::GIT_BRANCH);
     if state.plugin_enabled(CorePlugin::DailyNotes) || state.plugin_enabled(CorePlugin::Templates) {
         section(ui, "Core plugins");
     }
@@ -175,6 +177,7 @@ fn page(ui: &mut egui::Ui, state: &mut AppState, win: &mut SettingsWindow) {
         SettingsPage::CorePlugins => plugins_page(ui, state),
         SettingsPage::DailyNotes => daily_page(ui, state, win),
         SettingsPage::Templates => templates_page(ui, state, win),
+        SettingsPage::GitBackup => super::git_ui::settings_page(ui, state),
         SettingsPage::About => about_page(ui, state),
     }
 }
@@ -184,7 +187,7 @@ fn page(ui: &mut egui::Ui, state: &mut AppState, win: &mut SettingsWindow) {
 // ---------------------------------------------------------------------------
 
 /// A setting: name and description on the left, control on the right.
-fn row(ui: &mut egui::Ui, name: &str, desc: &str, control: impl FnOnce(&mut egui::Ui)) {
+pub(super) fn row(ui: &mut egui::Ui, name: &str, desc: &str, control: impl FnOnce(&mut egui::Ui)) {
     let pal = Palette::of(ui.ctx());
     ui.horizontal(|ui| {
         ui.vertical(|ui| {
@@ -200,7 +203,7 @@ fn row(ui: &mut egui::Ui, name: &str, desc: &str, control: impl FnOnce(&mut egui
     ui.separator();
 }
 
-fn heading(ui: &mut egui::Ui, text: &str) {
+pub(super) fn heading(ui: &mut egui::Ui, text: &str) {
     let pal = Palette::of(ui.ctx());
     ui.add_space(8.0);
     ui.label(RichText::new(text).strong().size(15.0).color(pal.strong));
@@ -226,13 +229,19 @@ fn toggle(ui: &mut egui::Ui, on: &mut bool) -> bool {
     changed
 }
 
-fn toggle_row(ui: &mut egui::Ui, name: &str, desc: &str, on: &mut bool) -> bool {
+pub(super) fn toggle_row(ui: &mut egui::Ui, name: &str, desc: &str, on: &mut bool) -> bool {
     let mut changed = false;
     row(ui, name, desc, |ui| changed = toggle(ui, on));
     changed
 }
 
-fn text_row(ui: &mut egui::Ui, name: &str, desc: &str, text: &mut String, hint: &str) -> bool {
+pub(super) fn text_row(
+    ui: &mut egui::Ui,
+    name: &str,
+    desc: &str,
+    text: &mut String,
+    hint: &str,
+) -> bool {
     let mut changed = false;
     row(ui, name, desc, |ui| {
         changed = ui

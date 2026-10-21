@@ -8,6 +8,9 @@ mod edit_blocks;
 mod edit_deco;
 mod editor;
 mod explorer_ui;
+#[cfg(test)]
+mod git_tests;
+mod git_ui;
 mod graph;
 mod groups;
 mod heading_nav;
@@ -72,6 +75,8 @@ pub enum Action {
     OpenPdf(NotePath, u32, OpenIn),
     /// Switch the active note between Live Preview, Source and Reading.
     SetMode(crate::editor::DisplayMode),
+    /// Git backup (explorer menu).
+    Git(git_ui::GitAction),
 }
 
 fn apply(state: &mut AppState, action: Action) {
@@ -99,6 +104,7 @@ fn apply(state: &mut AppState, action: Action) {
         Action::Ws(a) => ws_ui::apply(state, a),
         Action::OpenPdf(p, page, how) => state.open_pdf_at(&p, page, how),
         Action::SetMode(m) => state.set_display_mode(m),
+        Action::Git(a) => git_ui::apply(state, a),
         Action::ShowBacklinks => {
             state.settings.right_open = true;
             state.settings.right_pane = RightPane::Backlinks;
@@ -356,6 +362,11 @@ impl ObsiApp {
                 "plugins" => P::CorePlugins,
                 "daily" => P::DailyNotes,
                 "templates" => P::Templates,
+                "git" => P::GitBackup,
+                "git-ignore" => {
+                    state.git.scroll_gitignore = true;
+                    P::GitBackup
+                }
                 "about" => P::About,
                 _ => P::Editor,
             };
@@ -878,6 +889,7 @@ impl ObsiApp {
             }
         }
         settings_ui::show(&ctx, state);
+        git_ui::dialogs(&ctx, state);
         groups::drag_preview(&ctx);
         toasts(&ctx, state);
 
@@ -894,7 +906,7 @@ impl ObsiApp {
         if let Some(t) = state.next_autosave_in() {
             ctx.request_repaint_after(Duration::from_secs_f64(t + 0.02));
         }
-        if state.note_info_stale() || !state.toasts.is_empty() {
+        if state.note_info_stale() || !state.toasts.is_empty() || state.git.running > 0 {
             ctx.request_repaint_after(Duration::from_millis(500));
         }
         // Poll the file watcher regularly.
