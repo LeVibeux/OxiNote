@@ -1,4 +1,4 @@
-# ObsiRust — Plan de portage d'Obsidian en Rust
+# OxiNote — Plan de portage d'Obsidian en Rust
 
 Obsidian est une application propriétaire (Electron + TypeScript, code source fermé).
 « Porter » Obsidian signifie donc **réimplémenter** ses fonctionnalités en Rust,
@@ -27,22 +27,22 @@ Non-objectifs (pour l'instant) : Sync/Publish (services payants), compatibilité
 
 ```
 crates/
-├── ors-core       Types partagés : NotePath, ParsedNote, Link, Tag, GraphData, traits VaultRead / LinkResolver, MemoryVault
-├── ors-markdown   Parseur Obsidian-flavored → ParsedNote ; rendu HTML ; réécriture de liens
-├── ors-vault      Vault sur disque : listing, lecture/écriture, création, corbeille, watcher, config .obsidian, daily notes, templates
-├── ors-index      MetadataCache (résolution de liens, backlinks, tags), moteur de recherche, refactor (rename + maj liens)
-├── ors-graph      Layout force-directed (Barnes-Hut), graphe local, filtres
-├── ors-cli        Binaire `obsirust` : stats, search, backlinks, export HTML
-└── ors-app        Binaire GUI `obsirust-app` (eframe/egui)
+├── oxi-core       Types partagés : NotePath, ParsedNote, Link, Tag, GraphData, traits VaultRead / LinkResolver, MemoryVault
+├── oxi-markdown   Parseur Obsidian-flavored → ParsedNote ; rendu HTML ; réécriture de liens
+├── oxi-vault      Vault sur disque : listing, lecture/écriture, création, corbeille, watcher, config .obsidian, daily notes, templates
+├── oxi-index      MetadataCache (résolution de liens, backlinks, tags), moteur de recherche, refactor (rename + maj liens)
+├── oxi-graph      Layout force-directed (Barnes-Hut), graphe local, filtres
+├── oxi-cli        Binaire `oxinote` : stats, search, backlinks, export HTML
+└── oxi-app        Binaire GUI `oxinote-app` (eframe/egui)
 ```
 
 Graphe de dépendances :
 
 ```
-ors-core ◄── ors-markdown ◄──┐
-   ▲  ▲  ◄── ors-vault ◄─────┤
-   │  └───── ors-graph       ├── ors-index ◄── ors-cli
-   │                         │       ▲    ◄── ors-app
+oxi-core ◄── oxi-markdown ◄──┐
+   ▲  ▲  ◄── oxi-vault ◄─────┤
+   │  └───── oxi-graph       ├── oxi-index ◄── oxi-cli
+   │                         │       ▲    ◄── oxi-app
    └─────────────────────────┘       │
 ```
 
@@ -56,7 +56,7 @@ Choix techniques :
 
 ## 3. Contrat d'interfaces
 
-Le contrat est figé dans `ors-core` (types) et dans les **signatures publiques stubées** de chaque crate
+Le contrat est figé dans `oxi-core` (types) et dans les **signatures publiques stubées** de chaque crate
 (fonctions qui renvoient des valeurs vides par défaut). Chaque équipe implémente sa crate sans
 casser ces signatures ; elle peut en **ajouter**. Ainsi tout compile dès le départ et les crates
 peuvent être développées en parallèle.
@@ -65,7 +65,7 @@ peuvent être développées en parallèle.
 
 | Phase | Contenu | Livrable |
 |---|---|---|
-| 0 | Plan, workspace, `ors-core`, stubs des API | `cargo build` vert |
+| 0 | Plan, workspace, `oxi-core`, stubs des API | `cargo build` vert |
 | 1 | 5 agents en parallèle (voir §5) | Chaque crate implémentée + tests |
 | 2 | Intégration : merge, tests de bout en bout sur un vault exemple, correction des écarts | `cargo test --workspace` vert, app qui s'ouvre |
 | 3 | P2 : plugins, thèmes, Canvas, onglets multiples, performances (vault de 10k notes) | — |
@@ -74,11 +74,11 @@ peuvent être développées en parallèle.
 
 | Agent | Crate(s) | Responsabilités |
 |---|---|---|
-| A — Markdown | `ors-markdown` | `parse`, `render_html`, `rewrite_links`, toute la syntaxe Obsidian, tests exhaustifs |
-| B — Vault | `ors-vault` | FS, config `.obsidian`, création « Untitled N », corbeille, watcher, daily notes, templates |
-| C — Index | `ors-index` | MetadataCache, résolution de liens, backlinks, tags, recherche, rename + maj des liens |
-| D — Graphe & CLI | `ors-graph`, `ors-cli` | Layout force-directed, graphe local, CLI, export HTML statique |
-| E — GUI | `ors-app` | Application eframe : panneaux, éditeur, aperçu, recherche, switcher, palette, graphe |
+| A — Markdown | `oxi-markdown` | `parse`, `render_html`, `rewrite_links`, toute la syntaxe Obsidian, tests exhaustifs |
+| B — Vault | `oxi-vault` | FS, config `.obsidian`, création « Untitled N », corbeille, watcher, daily notes, templates |
+| C — Index | `oxi-index` | MetadataCache, résolution de liens, backlinks, tags, recherche, rename + maj des liens |
+| D — Graphe & CLI | `oxi-graph`, `oxi-cli` | Layout force-directed, graphe local, CLI, export HTML statique |
+| E — GUI | `oxi-app` | Application eframe : panneaux, éditeur, aperçu, recherche, switcher, palette, graphe |
 
 Règles communes : chaque agent ne modifie **que** ses crates ; `cargo fmt`, `cargo clippy -D warnings`,
 `cargo test -p <crate>` doivent passer ; pas de `unsafe`, pas de `unwrap()` hors tests.
@@ -90,7 +90,7 @@ Règles communes : chaque agent ne modifie **que** ses crates ; `cargo fmt`, `ca
 liste de toutes les propriétés et de leurs valeurs, arbre des tags, autocomplétion `#`,
 renommage et fusion de tags dans tout le vault, commandes CLI `props`, `prop`, `tag`.
 
-**Interface (vague 2, après la base de l'agent E)** : un agent par zone, chacun dans ses propres modules de `ors-app` :
+**Interface (vague 2, après la base de l'agent E)** : un agent par zone, chacun dans ses propres modules de `oxi-app` :
 
 | Zone | Contenu (comportement Obsidian) |
 |---|---|
@@ -123,8 +123,8 @@ la CLI et l'app.
 
 ## 7. Critères d'acceptation (fin de phase 2)
 
-- `obsirust stats examples/sample-vault` affiche notes / liens / tags / liens non résolus corrects.
-- `obsirust search examples/sample-vault 'tag:#projet "rust"'` renvoie les bons fichiers.
-- `obsirust export examples/sample-vault out/` produit un site HTML navigable (wikilinks → liens relatifs).
+- `oxinote stats examples/sample-vault` affiche notes / liens / tags / liens non résolus corrects.
+- `oxinote search examples/sample-vault 'tag:#projet "rust"'` renvoie les bons fichiers.
+- `oxinote export examples/sample-vault out/` produit un site HTML navigable (wikilinks → liens relatifs).
 - L'app s'ouvre sur un vault, édite et sauvegarde une note, affiche les backlinks et le graphe.
 - Renommer une note met à jour tous les liens entrants.

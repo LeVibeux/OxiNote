@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=ObsiRust
-Comment=Réimplémentation d'Obsidian en Rust
-Exec=obsirust-app %F
-Icon=obsirust
-Terminal=false
-Categories=Office;TextEditor;
-StartupWMClass=obsirust

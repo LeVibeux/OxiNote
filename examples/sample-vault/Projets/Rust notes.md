@@ -2,7 +2,7 @@
 
 ## Ownership
 
-Chaque valeur a un unique propriétaire. Voir aussi [[ObsiRust]]. #rust
+Chaque valeur a un unique propriétaire. Voir aussi [[OxiNote]]. #rust
 
 ## Borrowing
 

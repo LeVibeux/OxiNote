@@ -2996,99 +2996,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ors-app"
-version = "0.2.1"
-dependencies = [
- "chrono",
- "directories",
- "eframe",
- "egui_extras",
- "flate2",
- "hayro",
- "image",
- "ors-core",
- "ors-graph",
- "ors-index",
- "ors-markdown",
- "ors-vault",
- "pulldown-cmark",
- "rfd",
- "serde",
- "serde_json",
- "sha2",
- "tar",
- "tempfile",
- "ureq",
- "zip",
-]
-
-[[package]]
-name = "ors-cli"
-version = "0.2.1"
-dependencies = [
- "anyhow",
- "clap",
- "ors-core",
- "ors-graph",
- "ors-index",
- "ors-markdown",
- "ors-vault",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "ors-core"
-version = "0.2.1"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "ors-graph"
-version = "0.2.1"
-dependencies = [
- "ors-core",
-]
-
-[[package]]
-name = "ors-index"
-version = "0.2.1"
-dependencies = [
- "ors-core",
- "ors-markdown",
- "regex",
- "serde_json",
- "unicode-normalization",
-]
-
-[[package]]
-name = "ors-markdown"
-version = "0.2.1"
-dependencies = [
- "ors-core",
- "percent-encoding",
- "pulldown-cmark",
- "serde_json",
- "serde_norway",
-]
-
-[[package]]
-name = "ors-vault"
-version = "0.2.1"
-dependencies = [
- "chrono",
- "notify-debouncer-full",
- "ors-core",
- "serde",
- "serde_json",
- "tempfile",
- "trash",
-]
-
-[[package]]
 name = "os_pipe"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3105,6 +3012,99 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36820e9051aca1014ddc75770aab4d68bc1e9e632f0f5627c4086bc216fb583b"
 dependencies = [
  "ttf-parser",
+]
+
+[[package]]
+name = "oxi-app"
+version = "0.2.1"
+dependencies = [
+ "chrono",
+ "directories",
+ "eframe",
+ "egui_extras",
+ "flate2",
+ "hayro",
+ "image",
+ "oxi-core",
+ "oxi-graph",
+ "oxi-index",
+ "oxi-markdown",
+ "oxi-vault",
+ "pulldown-cmark",
+ "rfd",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tempfile",
+ "ureq",
+ "zip",
+]
+
+[[package]]
+name = "oxi-cli"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "oxi-core",
+ "oxi-graph",
+ "oxi-index",
+ "oxi-markdown",
+ "oxi-vault",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "oxi-core"
+version = "0.2.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "oxi-graph"
+version = "0.2.1"
+dependencies = [
+ "oxi-core",
+]
+
+[[package]]
+name = "oxi-index"
+version = "0.2.1"
+dependencies = [
+ "oxi-core",
+ "oxi-markdown",
+ "regex",
+ "serde_json",
+ "unicode-normalization",
+]
+
+[[package]]
+name = "oxi-markdown"
+version = "0.2.1"
+dependencies = [
+ "oxi-core",
+ "percent-encoding",
+ "pulldown-cmark",
+ "serde_json",
+ "serde_norway",
+]
+
+[[package]]
+name = "oxi-vault"
+version = "0.2.1"
+dependencies = [
+ "chrono",
+ "notify-debouncer-full",
+ "oxi-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "trash",
 ]
 
 [[package]]

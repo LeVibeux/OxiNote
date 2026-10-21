@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=OxiNote
+Comment=Notes Markdown, compatible avec les vaults Obsidian
+Exec=oxinote-app %F
+Icon=oxinote
+Terminal=false
+Categories=Office;TextEditor;
+StartupWMClass=oxinote

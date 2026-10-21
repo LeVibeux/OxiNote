@@ -1,0 +1,38 @@
+[package]
+name = "oxi-app"
+description = "OxiNote desktop application"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "oxinote-app"
+path = "src/main.rs"
+
+[dependencies]
+oxi-core.workspace = true
+oxi-markdown.workspace = true
+oxi-vault.workspace = true
+oxi-index.workspace = true
+oxi-graph.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+eframe = { version = "0.37", features = ["persistence", "glow"] }
+egui_extras = { version = "0.37", features = ["image"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+rfd = "0.17"
+pulldown-cmark = { version = "0.13", default-features = false }
+directories = "6"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+hayro = "0.8.0"
+ureq = { version = "3", features = ["platform-verifier"] }
+sha2 = "0.10"
+flate2 = "1"
+tar = "0.4"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true
