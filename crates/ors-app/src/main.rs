@@ -63,6 +63,23 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
             "--demo" => s.demo = true,
             "--fresh" => s.fresh = true,
             "--reading" => s.reading = true,
+            "--source" => s.source = true,
+            "--nav" => {
+                use crate::settings::HeadingNavigator as H;
+                s.nav = Some(match value(&mut it, &a)?.as_str() {
+                    "off" => H::Off,
+                    "a" => H::Floating,
+                    "b" => H::Loupe,
+                    _ => return Err("--nav expects off|a|b".into()),
+                });
+            }
+            "--nav-hover" => {
+                s.nav_hover = Some(
+                    value(&mut it, &a)?
+                        .parse()
+                        .map_err(|_| "--nav-hover expects a number".to_string())?,
+                );
+            }
             "--graph" => s.graph = true,
             "--graph-panel" => s.graph_panel = true,
             "--palette" => s.palette = true,

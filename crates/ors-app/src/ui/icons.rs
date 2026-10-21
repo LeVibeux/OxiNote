@@ -46,3 +46,4 @@ pub const LINK_SIMPLE: &str = "\u{e2e6}";
 pub const LIST_BULLETS: &str = "\u{e2f2}";
 pub const LIST_DASHES: &str = "\u{e2f4}";
 pub const ARTICLE: &str = "\u{e0a8}";
+pub const DOTS_THREE: &str = "\u{e1fe}";

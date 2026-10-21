@@ -9,7 +9,7 @@ use super::theme::Palette;
 use crate::commands::{Command, CommandRegistry};
 use crate::hotkeys;
 use crate::plugins::CorePlugin;
-use crate::settings::{EditingMode, PropertiesInDocument, ThemeChoice};
+use crate::settings::{EditingMode, HeadingNavigator, PropertiesInDocument, ThemeChoice};
 use crate::state::AppState;
 use crate::workbench::{SettingsPage, SettingsWindow};
 
@@ -279,6 +279,24 @@ fn editor_page(ui: &mut egui::Ui, state: &mut AppState) {
                             "Source mode",
                         )
                         .changed();
+                });
+        },
+    );
+    row(
+        ui,
+        "Heading navigator",
+        "Ticks on the right edge of notes to jump between headings.",
+        |ui| {
+            egui::ComboBox::from_id_salt("heading-nav")
+                .selected_text(s.heading_navigator.label())
+                .show_ui(ui, |ui| {
+                    for m in [
+                        HeadingNavigator::Off,
+                        HeadingNavigator::Floating,
+                        HeadingNavigator::Loupe,
+                    ] {
+                        ui.selectable_value(&mut s.heading_navigator, m, m.label());
+                    }
                 });
         },
     );

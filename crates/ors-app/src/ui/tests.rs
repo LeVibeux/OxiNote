@@ -522,3 +522,171 @@ fn images_and_line_numbers_render_without_touching_the_text() {
     assert_eq!(placed[0].size.y, 15.0);
     assert_eq!(text_of(&mut app, &path), text);
 }
+
+#[test]
+fn modes_switch_per_tab_and_the_status_bar_follows() {
+    use crate::editor::DisplayMode;
+    let ctx = egui::Context::default();
+    let mut app = app();
+    let path = NotePath::new("Orpheline.md").expect("path");
+    state(&mut app).open_at_line(&path, 0, OpenIn::CurrentTab);
+    frames(&mut app, &ctx, 3);
+    let label = |app: &mut ObsiApp| state(app).display_mode().map(DisplayMode::label);
+    assert_eq!(label(&mut app), Some("Live Preview"));
+    // Command: Live Preview <-> Source.
+    state(&mut app).execute(Command::ToggleLivePreview);
+    assert_eq!(label(&mut app), Some("Source mode"));
+    // Ctrl+E: editing <-> reading, the Source choice is remembered.
+    frame(&mut app, &ctx, vec![key(Key::E, Modifiers::COMMAND)]);
+    assert_eq!(label(&mut app), Some("Reading view"));
+    frame(&mut app, &ctx, vec![key(Key::E, Modifiers::COMMAND)]);
+    assert_eq!(label(&mut app), Some("Source mode"));
+    // The header menu actions.
+    apply(state(&mut app), Action::SetMode(DisplayMode::Reading));
+    assert_eq!(label(&mut app), Some("Reading view"));
+    apply(state(&mut app), Action::SetMode(DisplayMode::LivePreview));
+    assert_eq!(label(&mut app), Some("Live Preview"));
+    // Another tab keeps its own mode.
+    state(&mut app).open(&NotePath::new("Accueil.md").expect("path"), OpenIn::NewTab);
+    frames(&mut app, &ctx, 2);
+    state(&mut app).execute(Command::ToggleLivePreview);
+    assert_eq!(label(&mut app), Some("Source mode"));
+    state(&mut app).active = Some(0);
+    assert_eq!(label(&mut app), Some("Live Preview"));
+}
+
+#[test]
+fn source_mode_shows_frontmatter_and_hides_no_marker() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("source");
+    let text =
+        "---\ntitle: T\n---\n# Titre\n\n**gras** et [[Accueil]]\n\n```rust\nlet x = 1;\n```\n";
+    open_with_text(&mut app, &ctx, "Src.md", text);
+    let tab = state(&mut app).active_tab().expect("tab").id;
+    let hidden_sections = |app: &ObsiApp| {
+        let (_, job) = &app.caches.highlight[&tab];
+        assert_eq!(job.text, text);
+        job.sections
+            .iter()
+            .filter(|s| s.format.font_id.size < 1.0)
+            .count()
+    };
+    // Live Preview hides the YAML and the markers.
+    assert!(hidden_sections(&app) > 0);
+    state(&mut app).set_display_mode(crate::editor::DisplayMode::Source);
+    frames(&mut app, &ctx, 3);
+    assert_eq!(hidden_sections(&app), 0);
+    // Headings are not enlarged in Source mode.
+    let (_, job) = &app.caches.highlight[&tab];
+    let max = job
+        .sections
+        .iter()
+        .map(|s| s.format.font_id.size)
+        .fold(0.0, f32::max);
+    assert!(max <= state(&mut app).settings.font_size + 0.01, "{max}");
+    assert_eq!(
+        text_of(&mut app, &NotePath::new("Src.md").expect("p")),
+        text
+    );
+}
+
+/// A note with `n` sections of a few lines each.
+fn long_note(n: usize) -> String {
+    let mut t = String::new();
+    for i in 0..n {
+        t.push_str(&format!("## Section {i}\n\n"));
+        for j in 0..6 {
+            t.push_str(&format!("ligne {i}.{j}\n\n"));
+        }
+    }
+    t
+}
+
+/// Screen position of the tick of heading `i` (of `n`) at rest.
+fn nav_tick_pos(ctx: &egui::Context, tab: u64, n: usize, i: usize) -> egui::Pos2 {
+    let zone = ctx
+        .read_response(heading_nav::strip_id(tab))
+        .expect("navigator drawn")
+        .rect;
+    let pitch = (zone.height() - 12.0) / n as f32;
+    egui::pos2(zone.center().x, zone.top() + 6.0 + (i as f32 + 0.5) * pitch)
+}
+
+#[test]
+fn clicking_a_heading_tick_scrolls_to_the_heading_and_moves_the_caret() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("nav-click");
+    let text = long_note(20);
+    let path = open_with_text(&mut app, &ctx, "Long.md", &text);
+    let tab = state(&mut app).active_tab().expect("tab").id;
+    frames(&mut app, &ctx, 3);
+    assert_eq!(app.caches.nav.offsets.get(&tab).copied(), Some(0.0));
+    let target = 12;
+    let pos = nav_tick_pos(&ctx, tab, 20, target);
+    let button = |pressed| Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    // Hover for a few frames so that the magnifier is fully open, then click.
+    frame(&mut app, &ctx, vec![Event::PointerMoved(pos)]);
+    frames(&mut app, &ctx, 12);
+    frame(&mut app, &ctx, vec![button(true)]);
+    frame(&mut app, &ctx, vec![button(false)]);
+    frames(&mut app, &ctx, 30);
+    let offset = app.caches.nav.offsets[&tab];
+    assert!(offset > 200.0, "not scrolled: {offset}");
+    // The caret is at the start of the heading.
+    let at = text.find("## Section 12").expect("heading");
+    let id = egui::Id::unique(("editor", tab));
+    let sel = edit::read_sel(&ctx, id, &text).expect("selection");
+    assert_eq!((sel.start, sel.end), (at, at));
+    assert_eq!(text_of(&mut app, &path), text);
+}
+
+#[test]
+fn hovering_the_ticks_opens_the_floating_outline() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("nav-hover");
+    state(&mut app).settings.heading_navigator = crate::settings::HeadingNavigator::Floating;
+    open_with_text(&mut app, &ctx, "Long.md", &long_note(8));
+    let tab = state(&mut app).active_tab().expect("tab").id;
+    frames(&mut app, &ctx, 3);
+    assert!(!app.caches.nav.card_open);
+    let pos = nav_tick_pos(&ctx, tab, 8, 3);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(pos)]);
+    frames(&mut app, &ctx, 2);
+    assert!(app.caches.nav.card_open, "card not opened");
+    // Moving away closes it.
+    frame(
+        &mut app,
+        &ctx,
+        vec![Event::PointerMoved(egui::pos2(500.0, 400.0))],
+    );
+    frames(&mut app, &ctx, 2);
+    assert!(!app.caches.nav.card_open, "card still open");
+}
+
+#[test]
+fn heading_tick_click_also_scrolls_the_reading_view() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("nav-reading");
+    state(&mut app).settings.heading_navigator = crate::settings::HeadingNavigator::Floating;
+    open_with_text(&mut app, &ctx, "Long.md", &long_note(20));
+    state(&mut app).set_display_mode(crate::editor::DisplayMode::Reading);
+    let tab = state(&mut app).active_tab().expect("tab").id;
+    frames(&mut app, &ctx, 4);
+    let pos = nav_tick_pos(&ctx, tab, 20, 15);
+    let button = |pressed| Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    frame(&mut app, &ctx, vec![Event::PointerMoved(pos)]);
+    frame(&mut app, &ctx, vec![button(true)]);
+    frame(&mut app, &ctx, vec![button(false)]);
+    frames(&mut app, &ctx, 30);
+    assert!(app.caches.nav.offsets[&tab] > 200.0);
+}

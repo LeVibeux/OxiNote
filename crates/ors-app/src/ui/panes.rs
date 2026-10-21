@@ -9,7 +9,7 @@ use super::theme::Palette;
 use super::{Action, UiCaches};
 use crate::commands::Command;
 use crate::settings::{LeftPane, RightPane};
-use crate::state::{AppState, OpenIn, ViewMode};
+use crate::state::{AppState, OpenIn};
 
 pub(super) fn open_in_from(ui: &egui::Ui, resp: &egui::Response) -> OpenIn {
     let m = ui.input(|i| i.modifiers);
@@ -197,7 +197,7 @@ fn side_note(state: &AppState) -> Option<NotePath> {
 
 pub fn status_bar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Action>) {
     let pal = Palette::of(ui.ctx());
-    let mode = state.active_tab().and_then(|t| t.note()).map(|n| n.mode);
+    let mode = state.display_mode();
     let path = state.active_note().cloned();
     let dirty = path
         .as_ref()
@@ -211,18 +211,13 @@ pub fn status_bar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Act
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 14.0;
         let small = |t: String| RichText::new(t).size(12.0).color(pal.muted);
-        if let Some(mode) = mode {
-            let label = match mode {
-                ViewMode::Source => "✏ Editing",
-                ViewMode::Reading => "📖 Reading",
-            };
-            if ui
-                .add(egui::Label::new(small(label.into())).sense(Sense::click()))
-                .on_hover_text("Toggle reading view (Ctrl+E)")
+        if let Some(mode) = mode
+            && ui
+                .add(egui::Label::new(small(mode.label().into())).sense(Sense::click()))
+                .on_hover_text("Click to switch Live Preview / Source mode (Ctrl+E: reading view)")
                 .clicked()
-            {
-                actions.push(Action::Exec(Command::ToggleMode));
-            }
+        {
+            actions.push(Action::Exec(Command::ToggleLivePreview));
         }
         if path.is_some() {
             ui.label(small(format!("{chars} characters")));

@@ -59,6 +59,7 @@ pub enum Command {
     UnfoldAll,
     ToggleLivePreview,
     ToggleLineNumbers,
+    CycleHeadingNavigator,
     /// Workspace / file management / settings commands (see
     /// [`crate::ws_commands`]).
     Ws(WsCommand),
@@ -179,6 +180,11 @@ impl Default for CommandRegistry {
             spec(UnfoldAll, "Unfold all headings and lists", None),
             spec(ToggleLivePreview, "Toggle Live Preview/Source mode", None),
             spec(ToggleLineNumbers, "Editor: Toggle line numbers", None),
+            spec(
+                CycleHeadingNavigator,
+                "Editor: Cycle heading navigator (off / floating outline / magnifier)",
+                None,
+            ),
         ];
         let mut specs = specs;
         specs.extend(crate::ws_commands::specs());
