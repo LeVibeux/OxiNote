@@ -342,9 +342,8 @@ pub fn backup(vault: &Path, info: &RepoInfo, template: &str) -> Result<BackupOut
     run_ok(vault, &[], &["add", "-A", "--", "."])?;
     let message = render_message(template, &now_date_string(), n);
     let cfg = identity_cfg(vault);
-    let has_head = run(vault, &[], &["rev-parse", "--verify", "-q", "HEAD"], None)?.ok;
     let mut args = vec!["commit", "-q", "-m", message.as_str()];
-    if info.is_nested() && has_head {
+    if info.is_nested() {
         // Only the vault's files, whatever else is staged in the repository.
         args.extend(["--", "."]);
     }
@@ -1893,6 +1892,28 @@ mod tests {
         assert_eq!(file_at(&vault, &log[1].sha, "a.md").unwrap(), "1\n");
         assert_eq!(status_count(&vault).unwrap(), 0, "outside not counted");
     }
+
+    #[test]
+    fn nested_vault_in_unborn_parent_ignores_outside_index() {
+        require_git!();
+        let dir = tempfile::tempdir().unwrap();
+        let top = dir.path();
+        run_ok(top, &["init.defaultBranch=main".into()], &["init", "-q"]).unwrap();
+        run_ok(top, &[], &["config", "core.autocrlf", "false"]).unwrap();
+        write(top, "outside.txt", "1\n");
+        write(top, "vault/a.md", "1\n");
+        // Already staged by the user, outside the vault, before any commit.
+        run_ok(top, &[], &["add", "outside.txt"]).unwrap();
+        let vault = top.join("vault");
+        let info = detect_repo(&vault).unwrap().unwrap();
+        assert!(info.is_nested());
+        backup(&vault, &info, DEFAULT_TEMPLATE).unwrap();
+        let files = head_files(top);
+        assert_eq!(files, vec!["vault/a.md".to_string()], "{files:?}");
+        let st = run_ok(top, &[], &["status", "--porcelain"]).unwrap().text();
+        assert!(st.contains("A  outside.txt"), "still staged: {st}");
+    }
+
     #[test]
     fn locked_repository_is_retried_not_failed() {
         require_git!();
