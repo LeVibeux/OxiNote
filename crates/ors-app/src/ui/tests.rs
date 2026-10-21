@@ -522,3 +522,73 @@ fn images_and_line_numbers_render_without_touching_the_text() {
     assert_eq!(placed[0].size.y, 15.0);
     assert_eq!(text_of(&mut app, &path), text);
 }
+
+#[test]
+fn modes_switch_per_tab_and_the_status_bar_follows() {
+    use crate::editor::DisplayMode;
+    let ctx = egui::Context::default();
+    let mut app = app();
+    let path = NotePath::new("Orpheline.md").expect("path");
+    state(&mut app).open_at_line(&path, 0, OpenIn::CurrentTab);
+    frames(&mut app, &ctx, 3);
+    let label = |app: &mut ObsiApp| state(app).display_mode().map(DisplayMode::label);
+    assert_eq!(label(&mut app), Some("Live Preview"));
+    // Command: Live Preview <-> Source.
+    state(&mut app).execute(Command::ToggleLivePreview);
+    assert_eq!(label(&mut app), Some("Source mode"));
+    // Ctrl+E: editing <-> reading, the Source choice is remembered.
+    frame(&mut app, &ctx, vec![key(Key::E, Modifiers::COMMAND)]);
+    assert_eq!(label(&mut app), Some("Reading view"));
+    frame(&mut app, &ctx, vec![key(Key::E, Modifiers::COMMAND)]);
+    assert_eq!(label(&mut app), Some("Source mode"));
+    // The header menu actions.
+    apply(state(&mut app), Action::SetMode(DisplayMode::Reading));
+    assert_eq!(label(&mut app), Some("Reading view"));
+    apply(state(&mut app), Action::SetMode(DisplayMode::LivePreview));
+    assert_eq!(label(&mut app), Some("Live Preview"));
+    // Another tab keeps its own mode.
+    state(&mut app).open(
+        &NotePath::new("Accueil.md").expect("path"),
+        OpenIn::NewTab,
+    );
+    frames(&mut app, &ctx, 2);
+    state(&mut app).execute(Command::ToggleLivePreview);
+    assert_eq!(label(&mut app), Some("Source mode"));
+    state(&mut app).active = Some(0);
+    assert_eq!(label(&mut app), Some("Live Preview"));
+}
+
+#[test]
+fn source_mode_shows_frontmatter_and_hides_no_marker() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("source");
+    let text =
+        "---\ntitle: T\n---\n# Titre\n\n**gras** et [[Accueil]]\n\n```rust\nlet x = 1;\n```\n";
+    open_with_text(&mut app, &ctx, "Src.md", text);
+    let tab = state(&mut app).active_tab().expect("tab").id;
+    let hidden_sections = |app: &ObsiApp| {
+        let (_, job) = &app.caches.highlight[&tab];
+        assert_eq!(job.text, text);
+        job.sections
+            .iter()
+            .filter(|s| s.format.font_id.size < 1.0)
+            .count()
+    };
+    // Live Preview hides the YAML and the markers.
+    assert!(hidden_sections(&app) > 0);
+    state(&mut app).set_display_mode(crate::editor::DisplayMode::Source);
+    frames(&mut app, &ctx, 3);
+    assert_eq!(hidden_sections(&app), 0);
+    // Headings are not enlarged in Source mode.
+    let (_, job) = &app.caches.highlight[&tab];
+    let max = job
+        .sections
+        .iter()
+        .map(|s| s.format.font_id.size)
+        .fold(0.0, f32::max);
+    assert!(max <= state(&mut app).settings.font_size + 0.01, "{max}");
+    assert_eq!(
+        text_of(&mut app, &NotePath::new("Src.md").expect("p")),
+        text
+    );
+}

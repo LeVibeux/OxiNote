@@ -77,6 +77,8 @@ pub struct Ctx<'a> {
     clip_top: f32,
     /// Line of the last heading scrolled past the top of the viewport.
     current_line: Cell<Option<usize>>,
+    /// Inside a table cell: no wrapping (the grid sizes the columns).
+    no_wrap: Cell<bool>,
 }
 
 impl<'a> Ctx<'a> {
@@ -95,6 +97,7 @@ impl<'a> Ctx<'a> {
             scroll_heading: None,
             clip_top: 0.0,
             current_line: Cell::new(None),
+            no_wrap: Cell::new(false),
         }
     }
 }
@@ -177,6 +180,7 @@ pub fn reading_view(
             scroll_heading: scroll_to.and_then(|l| heading_for_line(&prepared.heading_lines, l)),
             clip_top,
             current_line: Cell::new(None),
+            no_wrap: Cell::new(false),
         };
         draw_blocks(ui, &cx, caches, &blocks, actions);
         current = cx.current_line.get();
@@ -409,6 +413,7 @@ fn draw_block(
             ui.add_space(cx.size * 0.5);
         }
         Block::Table { header, rows } => {
+            cx.no_wrap.set(true);
             egui::Grid::new(ui.next_auto_id())
                 .striped(true)
                 .spacing([18.0, 6.0])
@@ -424,6 +429,7 @@ fn draw_block(
                         ui.end_row();
                     }
                 });
+            cx.no_wrap.set(false);
             ui.add_space(cx.size * 0.5);
         }
         Block::Rule => {
@@ -494,12 +500,17 @@ fn flush_run(
     if run.is_empty() {
         return;
     }
-    ui.horizontal_wrapped(|ui| {
+    let body = |ui: &mut egui::Ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         for inline in run.drain(..) {
             draw_inline(ui, cx, caches, inline, size, strong, actions);
         }
-    });
+    };
+    if cx.no_wrap.get() {
+        ui.horizontal(body);
+    } else {
+        ui.horizontal_wrapped(body);
+    }
 }
 
 fn draw_inline(

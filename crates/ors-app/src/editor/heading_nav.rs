@@ -1,85 +1,166 @@
-//! Pure model of the heading navigator (a thin strip of ticks, one per
-//! heading, placed proportionally to the heading's position in the content).
-//! Not wired into the UI yet: the design is being validated first.
-#![allow(dead_code)]
+//! Pure model of the heading navigator: a compact stack of short horizontal
+//! ticks (one per heading) on the right edge of a note panel.
+//!
+//! Two designs share it: the floating table of contents (A, ticks at rest +
+//! a card on hover) and the magnifier (B, a macOS Dock effect on the ticks).
 
-/// A heading with its vertical position (content coordinates), `None` when
-/// it is not laid out (inside a folded section).
+use ors_core::Heading;
+
+/// A heading of the note with its vertical position in the content
+/// (`None` while it is not laid out: folded section, collapsed callout).
 #[derive(Debug, Clone, PartialEq)]
 pub struct NavHeading {
     pub level: u8,
     pub text: String,
+    /// 0-based line of the heading.
     pub line: usize,
     pub y: Option<f32>,
 }
 
-/// Fraction (0..=1) of the content height at which each heading sits.
-pub fn fractions(headings: &[NavHeading], total: f32) -> Vec<Option<f32>> {
-    headings
-        .iter()
-        .map(|h| {
-            h.y.filter(|_| total > 0.0)
-                .map(|y| (y / total).clamp(0.0, 1.0))
-        })
-        .collect()
+impl NavHeading {
+    pub fn from_parsed(h: &[Heading]) -> Vec<Self> {
+        h.iter()
+            .map(|h| Self {
+                level: h.level,
+                text: h.text.clone(),
+                line: h.line,
+                y: None,
+            })
+            .collect()
+    }
 }
 
-/// Tick length for `level` given the strip's `max` length: H1 longest.
-pub fn tick_len(level: u8, max: f32) -> f32 {
-    let k = f32::from(level.clamp(1, 6) - 1);
-    (max * (1.0 - 0.14 * k)).max(3.0)
+/// Spacing of the ticks at rest.
+pub const BASE_PITCH: f32 = 10.0;
+/// Width of the nav strip.
+pub const STRIP_WIDTH: f32 = 46.0;
+/// How many neighbours the magnifier enlarges.
+pub const REACH: f32 = 2.6;
+/// Extra slot height of the tick under the pointer.
+pub const ZOOM: f32 = 2.2;
+/// Tick thickness at rest / when magnified.
+pub const THICK: f32 = 2.0;
+pub const THICK_ZOOM: f32 = 3.0;
+
+/// Tick length by heading level: H1 longest.
+pub fn dash_len(level: u8) -> f32 {
+    match level {
+        0 | 1 => 20.0,
+        2 => 14.0,
+        _ => 8.0,
+    }
 }
 
-/// Tick thickness for `level`: H1 thickest.
-pub fn tick_thickness(level: u8) -> f32 {
-    3.0 - 0.4 * f32::from(level.clamp(1, 6) - 1)
+/// Spacing of the ticks: [`BASE_PITCH`], reduced so that the stack of `n`
+/// ticks never exceeds 70 % of the panel height.
+pub fn pitch(n: usize, panel_height: f32) -> f32 {
+    if n == 0 {
+        return BASE_PITCH;
+    }
+    (0.7 * panel_height / n as f32).clamp(3.0, BASE_PITCH)
 }
 
-/// Index of the current heading: the last one at or above `scroll + margin`;
-/// the first one when none is; at the bottom of the content, the last one
-/// that is visible.
-pub fn current(headings: &[NavHeading], scroll: f32, viewport: f32, total: f32) -> Option<usize> {
+/// Index of the current heading: the last one above the top of the visible
+/// area (`scroll` + a small margin). The first heading while none has been
+/// scrolled past.
+pub fn current(headings: &[NavHeading], scroll: f32) -> Option<usize> {
     let mut best = None;
-    let at_bottom = scroll + viewport >= total - 1.0;
     for (i, h) in headings.iter().enumerate() {
-        let Some(y) = h.y else { continue };
-        let limit = if at_bottom {
-            scroll + viewport
-        } else {
-            scroll + 24.0
-        };
-        if y <= limit {
+        if h.y.is_some_and(|y| y <= scroll + 24.0) {
             best = Some(i);
         }
     }
     best.or_else(|| headings.iter().position(|h| h.y.is_some()))
+        .or((!headings.is_empty()).then_some(0))
 }
 
-/// Next (`delta > 0`) or previous heading from `cur`, skipping hidden ones.
-pub fn step(headings: &[NavHeading], cur: Option<usize>, delta: i32) -> Option<usize> {
-    let visible: Vec<usize> = (0..headings.len())
-        .filter(|i| headings[*i].y.is_some())
+/// One tick of the strip.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tick {
+    /// Top of the slot, relative to the top of the strip at rest.
+    pub top: f32,
+    pub slot: f32,
+    /// Magnification factor 0..=1.
+    pub g: f32,
+}
+
+impl Tick {
+    pub fn center(&self) -> f32 {
+        self.top + self.slot / 2.0
+    }
+}
+
+/// Ticks at rest: `n` slots of `pitch`.
+pub fn rest_layout(n: usize, pitch: f32) -> Vec<Tick> {
+    (0..n)
+        .map(|i| Tick {
+            top: i as f32 * pitch,
+            slot: pitch,
+            g: 0.0,
+        })
+        .collect()
+}
+
+/// Fractional index under the pointer (`hy`: distance from the top of the
+/// strip at rest).
+pub fn focus(n: usize, pitch: f32, hy: f32) -> f32 {
+    (hy / pitch - 0.5).clamp(0.0, n.saturating_sub(1) as f32)
+}
+
+/// Magnifier layout: every tick gets `g = max(0, 1 - |i - focus| / REACH)`,
+/// its slot grows by `1 + ZOOM * g`, positions are accumulated and shifted
+/// so that the nearest tick stays under the pointer. `amount` (0..=1)
+/// blends between rest and fully magnified (smooth in/out).
+pub fn loupe_layout(n: usize, pitch: f32, hy: f32, amount: f32) -> Vec<Tick> {
+    if n == 0 {
+        return Vec::new();
+    }
+    let f = focus(n, pitch, hy);
+    let g: Vec<f32> = (0..n)
+        .map(|i| (1.0 - (i as f32 - f).abs() / REACH).max(0.0) * amount)
         .collect();
-    let pos = cur.and_then(|c| visible.iter().position(|v| *v == c));
-    let next = match (pos, delta.signum()) {
-        (Some(p), 1) => p + 1,
-        (Some(p), -1) => p.checked_sub(1)?,
-        (None, 1) => 0,
-        (None, -1) => visible.len().checked_sub(1)?,
-        _ => return cur,
-    };
-    visible.get(next).copied()
+    let slots: Vec<f32> = g.iter().map(|g| pitch * (1.0 + ZOOM * g)).collect();
+    let mut cum = Vec::with_capacity(n);
+    let mut acc = 0.0;
+    for s in &slots {
+        cum.push(acc);
+        acc += s;
+    }
+    let c = (f.round() as usize).min(n - 1);
+    // Shift so that the tick under the pointer stays under it (no jump);
+    // `amount` blends from the rest layout (no shift).
+    let offset = amount * (hy - (cum[c] + slots[c] / 2.0));
+    (0..n)
+        .map(|i| Tick {
+            top: cum[i] + offset,
+            slot: slots[i],
+            g: g[i],
+        })
+        .collect()
 }
 
-/// Tick nearest to `y` (strip coordinates) within `tolerance`.
-pub fn nearest(tick_ys: &[Option<f32>], y: f32, tolerance: f32) -> Option<usize> {
-    tick_ys
+/// Tick whose slot contains `y` (same coordinates as [`Tick::top`]); the
+/// nearest one when `y` falls in no slot.
+pub fn hit(ticks: &[Tick], y: f32) -> Option<usize> {
+    ticks
         .iter()
-        .enumerate()
-        .filter_map(|(i, t)| t.map(|t| (i, (t - y).abs())))
-        .filter(|(_, d)| *d <= tolerance)
-        .min_by(|a, b| a.1.total_cmp(&b.1))
-        .map(|(i, _)| i)
+        .position(|t| y >= t.top && y < t.top + t.slot)
+        .or_else(|| {
+            ticks
+                .iter()
+                .enumerate()
+                .min_by(|a, b| {
+                    (a.1.center() - y)
+                        .abs()
+                        .total_cmp(&(b.1.center() - y).abs())
+                })
+                .map(|(i, _)| i)
+        })
+}
+
+/// Left padding of a card row (floating table of contents).
+pub fn card_indent(level: u8) -> f32 {
+    8.0 + f32::from(level.clamp(1, 6) - 1) * 14.0
 }
 
 #[cfg(test)]
@@ -96,52 +177,91 @@ mod tests {
     }
 
     #[test]
-    fn fractions_are_proportional_to_y_not_index() {
-        let hs = [
-            h(1, Some(0.0)),
-            h(2, Some(100.0)),
-            h(2, None),
-            h(3, Some(900.0)),
-        ];
-        let f = fractions(&hs, 1000.0);
-        assert_eq!(f, vec![Some(0.0), Some(0.1), None, Some(0.9)]);
-        assert_eq!(fractions(&hs, 0.0), vec![None; 4]);
+    fn dash_lengths_by_level() {
+        assert_eq!(dash_len(1), 20.0);
+        assert_eq!(dash_len(2), 14.0);
+        assert_eq!(dash_len(3), 8.0);
+        assert_eq!(dash_len(6), 8.0);
     }
 
     #[test]
-    fn ticks_shrink_with_level() {
-        assert!(tick_len(1, 14.0) > tick_len(6, 14.0));
-        assert!(tick_thickness(1) > tick_thickness(6));
-        assert!(tick_len(6, 14.0) >= 3.0);
+    fn pitch_shrinks_for_long_notes() {
+        assert_eq!(pitch(10, 600.0), BASE_PITCH);
+        // 100 ticks in 600 px: 70 % = 420 px => 4.2 px each.
+        assert!((pitch(100, 600.0) - 4.2).abs() < 1e-4);
+        assert_eq!(pitch(1000, 600.0), 3.0);
+        assert_eq!(pitch(0, 600.0), BASE_PITCH);
     }
 
     #[test]
-    fn current_follows_scroll() {
+    fn current_is_the_last_heading_above_the_top() {
         let hs = [
             h(1, Some(50.0)),
             h(2, Some(400.0)),
             h(2, None),
             h(2, Some(900.0)),
         ];
-        assert_eq!(current(&hs, 0.0, 300.0, 1200.0), Some(0));
-        assert_eq!(current(&hs, 390.0, 300.0, 1200.0), Some(1));
-        assert_eq!(current(&hs, 900.0, 300.0, 1200.0), Some(3));
-        assert_eq!(current(&hs, 20.0, 300.0, 1200.0), Some(0));
+        assert_eq!(current(&hs, 0.0), Some(0));
+        assert_eq!(current(&hs, 380.0), Some(1));
+        assert_eq!(current(&hs, 399.0), Some(1));
+        assert_eq!(current(&hs, 5000.0), Some(3));
+        // Before the first heading: the first one.
+        let hs = [h(1, Some(500.0))];
+        assert_eq!(current(&hs, 0.0), Some(0));
+        assert_eq!(current(&[], 0.0), None);
+        // Not laid out yet: first heading.
+        assert_eq!(current(&[h(1, None), h(2, None)], 0.0), Some(0));
     }
 
     #[test]
-    fn step_skips_hidden_and_stops_at_ends() {
-        let hs = [h(1, Some(0.0)), h(2, None), h(2, Some(500.0))];
-        assert_eq!(step(&hs, Some(0), 1), Some(2));
-        assert_eq!(step(&hs, Some(2), -1), Some(0));
-        assert_eq!(step(&hs, Some(2), 1), None);
-        assert_eq!(step(&hs, None, 1), Some(0));
+    fn rest_layout_is_uniform() {
+        let t = rest_layout(3, 10.0);
+        assert_eq!(t[2].top, 20.0);
+        assert!(t.iter().all(|t| t.slot == 10.0 && t.g == 0.0));
+        assert_eq!(hit(&t, 14.0), Some(1));
+        assert_eq!(hit(&t, 500.0), Some(2));
     }
 
     #[test]
-    fn nearest_picks_closest_within_tolerance() {
-        let t = [Some(10.0), None, Some(14.0)];
-        assert_eq!(nearest(&t, 13.0, 3.0), Some(2));
-        assert_eq!(nearest(&t, 40.0, 3.0), None);
+    fn focus_is_fractional_and_clamped() {
+        assert_eq!(focus(10, 10.0, 55.0), 5.0);
+        assert_eq!(focus(10, 10.0, 0.0), 0.0);
+        assert_eq!(focus(10, 10.0, 999.0), 9.0);
+    }
+
+    #[test]
+    fn loupe_factors_follow_the_formula() {
+        let t = loupe_layout(12, 10.0, 65.0, 1.0);
+        let f = focus(12, 10.0, 65.0); // 6.0
+        assert_eq!(f, 6.0);
+        assert!((t[6].g - 1.0).abs() < 1e-5);
+        assert!((t[7].g - (1.0 - 1.0 / REACH)).abs() < 1e-5);
+        assert_eq!(t[0].g, 0.0); // beyond REACH
+        assert!((t[6].slot - 10.0 * (1.0 + ZOOM)).abs() < 1e-4);
+        assert!(t[0].slot == 10.0);
+    }
+
+    #[test]
+    fn loupe_keeps_the_point_under_the_pointer() {
+        for hy in [5.0, 33.0, 65.0, 98.0] {
+            let t = loupe_layout(10, 10.0, hy, 1.0);
+            let i = hit(&t, hy).expect("hit");
+            // The pointer is inside the slot of the tick it designates.
+            assert!(t[i].top <= hy + 1e-3 && hy <= t[i].top + t[i].slot + 1e-3);
+        }
+        // Not magnified: rest layout.
+        let t = loupe_layout(5, 10.0, 25.0, 0.0);
+        assert_eq!(t, rest_layout(5, 10.0));
+        // Positions are contiguous.
+        let t = loupe_layout(8, 10.0, 40.0, 1.0);
+        for w in t.windows(2) {
+            assert!((w[0].top + w[0].slot - w[1].top).abs() < 1e-3);
+        }
+    }
+
+    #[test]
+    fn card_rows_indent_by_level() {
+        assert_eq!(card_indent(1), 8.0);
+        assert_eq!(card_indent(3), 36.0);
     }
 }
