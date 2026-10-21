@@ -10,6 +10,7 @@ mod editor;
 mod explorer_ui;
 mod graph;
 mod groups;
+mod heading_nav;
 mod icons;
 mod modals;
 mod panes;
@@ -112,6 +113,7 @@ pub struct UiCaches {
     find: Option<edit::FindUi>,
     explorer: explorer_ui::ExplorerCache,
     embeds: edit_deco::EmbedCache,
+    nav: heading_nav::NavCache,
 }
 
 impl UiCaches {
@@ -141,6 +143,10 @@ pub struct Startup {
     pub reading: bool,
     /// Open notes in Source mode (`--source`, screenshots).
     pub source: bool,
+    /// Heading navigator design (`--nav off|a|b`) and forced hover position
+    /// (`--nav-hover FRACTION`), for screenshots.
+    pub nav: Option<crate::settings::HeadingNavigator>,
+    pub nav_hover: Option<f32>,
     pub graph: bool,
     /// Open the graph settings panel (screenshots).
     pub graph_panel: bool,
@@ -304,6 +310,10 @@ impl ObsiApp {
         if let Some(p) = state.active_note().cloned() {
             state.ws.explorer.reveal(&p);
         }
+        if let Some(m) = s.nav {
+            state.settings.heading_navigator = m;
+        }
+        self.caches.nav.force = s.nav_hover;
         if let Some(l) = s.left {
             state.settings.left_pane = l;
         }
@@ -689,7 +699,11 @@ fn leaf_content(
             if mode == ViewMode::Source && path.is_markdown() {
                 edit::find_bar(ui, state, caches, tab_id, &path, actions);
             }
-            egui::ScrollArea::vertical()
+            let heads = (path.is_markdown()
+                && state.settings.heading_navigator != crate::settings::HeadingNavigator::Off)
+                .then(|| caches.nav.headings(tab_id, state, &path));
+            caches.nav.ys = None;
+            let scroll_out = egui::ScrollArea::vertical()
                 .id_salt(("note-scroll", tab_id, mode == ViewMode::Reading))
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
@@ -713,6 +727,24 @@ fn leaf_content(
                         edit::edit_view(ui, state, caches, tab_id, &path, actions);
                     }
                 });
+            if let Some(heads) = heads {
+                let dm = if mode == ViewMode::Reading {
+                    DisplayMode::Reading
+                } else {
+                    DisplayMode::LivePreview
+                };
+                heading_nav::show(
+                    ui,
+                    state,
+                    caches,
+                    tab_id,
+                    i,
+                    dm,
+                    scroll_out.inner_rect,
+                    scroll_out.state.clamped_offset().y,
+                    &heads,
+                );
+            }
         }
     }
 }

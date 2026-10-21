@@ -228,6 +228,13 @@ impl AppState {
                 Some(_) => self.set_display_mode(DisplayMode::LivePreview),
                 None => {}
             },
+            Command::CycleHeadingNavigator => {
+                self.settings.heading_navigator = self.settings.heading_navigator.next();
+                self.info(format!(
+                    "Heading navigator: {}",
+                    self.settings.heading_navigator.label()
+                ));
+            }
             Command::ToggleLineNumbers => {
                 self.settings.show_line_numbers = !self.settings.show_line_numbers;
                 self.save_vault_settings();

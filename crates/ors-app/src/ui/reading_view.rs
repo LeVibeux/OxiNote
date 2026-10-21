@@ -1,7 +1,7 @@
 //! Reading view: draws the block tree of `crate::reading` with egui widgets
 //! (callouts, task checkboxes, recursive transclusions, link previews).
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -79,6 +79,8 @@ pub struct Ctx<'a> {
     current_line: Cell<Option<usize>>,
     /// Inside a table cell: no wrapping (the grid sizes the columns).
     no_wrap: Cell<bool>,
+    /// Screen `y` of the headings of the note (for the heading navigator).
+    heading_ys: RefCell<Vec<Option<f32>>>,
 }
 
 impl<'a> Ctx<'a> {
@@ -98,6 +100,7 @@ impl<'a> Ctx<'a> {
             clip_top: 0.0,
             current_line: Cell::new(None),
             no_wrap: Cell::new(false),
+            heading_ys: RefCell::new(Vec::new()),
         }
     }
 }
@@ -181,8 +184,10 @@ pub fn reading_view(
             clip_top,
             current_line: Cell::new(None),
             no_wrap: Cell::new(false),
+            heading_ys: RefCell::new(vec![None; prepared.heading_lines.len()]),
         };
         draw_blocks(ui, &cx, caches, &blocks, actions);
+        caches.nav.ys = Some(cx.heading_ys.take());
         current = cx.current_line.get();
         ui.add_space(40.0);
     });
@@ -253,6 +258,9 @@ fn draw_block(
             if cx.interactive {
                 let n = cx.heading_n.get();
                 cx.heading_n.set(n + 1);
+                if let Some(slot) = cx.heading_ys.borrow_mut().get_mut(n) {
+                    *slot = Some(r.response.rect.top());
+                }
                 if cx.scroll_heading == Some(n) {
                     ui.scroll_to_rect(r.response.rect, Some(Align::TOP));
                 }

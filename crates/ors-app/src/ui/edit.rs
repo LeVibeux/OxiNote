@@ -518,7 +518,7 @@ fn hash_of(t: &impl Hash) -> u64 {
 // Selection helpers
 // ---------------------------------------------------------------------------
 
-fn read_sel(ctx: &egui::Context, id: egui::Id, text: &str) -> Option<Sel> {
+pub(super) fn read_sel(ctx: &egui::Context, id: egui::Id, text: &str) -> Option<Sel> {
     let st = egui::TextEdit::load_state(ctx, id)?;
     let r = st.cursor.char_range()?;
     Some(Sel::new(
@@ -824,6 +824,17 @@ fn edit_body(
         sel_changed = true;
         want_focus = true;
         scroll = true;
+    }
+
+    // A click on the heading navigator: caret at the heading, scrolled to
+    // the top.
+    let mut align = Align::Center;
+    if let Some(line) = caches.nav.take_jump(tab_id) {
+        cur = Sel::caret(line_start_byte(text, line));
+        sel_changed = true;
+        want_focus = true;
+        scroll = true;
+        align = Align::TOP;
     }
 
     // ---- keys that must be handled before the TextEdit sees them -------
@@ -1190,7 +1201,7 @@ fn edit_body(
             .translate(origin.to_vec2())
     });
     if scroll && let Some(rect) = cursor_rect {
-        ui.scroll_to_rect(rect.expand(40.0), Some(Align::Center));
+        ui.scroll_to_rect(rect.expand(40.0), Some(align));
     }
 
     // The caret moved to another line: restyle on the next frame.
@@ -1252,6 +1263,17 @@ fn edit_body(
     // ---- gutter, folds and inline images --------------------------------
     {
         let rows = edit_deco::line_rows(&galley);
+        if let Some(hs) = caches.nav.cached(tab_id) {
+            caches.nav.ys = Some(
+                hs.iter()
+                    .map(|h| {
+                        rows.get(h.line)
+                            .filter(|_| !hidden.contains(&h.line))
+                            .map(|r| origin.y + r.top)
+                    })
+                    .collect(),
+            );
+        }
         if show_numbers {
             let caret_line = output.cursor_range.map(|r| {
                 line_of(
@@ -1499,15 +1521,12 @@ fn paint_widgets(
         }
         let bottom = rect_at(n, l.range.end);
         let (y0, y1) = (top.top(), bottom.bottom());
-        match &l.kind {
-            LineKind::Rule => {
-                let y = (y0 + y1) / 2.0;
-                painter.line_segment(
-                    [Pos2::new(off.x, y), Pos2::new(off.x + width, y)],
-                    Stroke::new(1.5, pal.border.gamma_multiply(1.6)),
-                );
-            }
-            _ => {}
+        if l.kind == LineKind::Rule {
+            let y = (y0 + y1) / 2.0;
+            painter.line_segment(
+                [Pos2::new(off.x, y), Pos2::new(off.x + width, y)],
+                Stroke::new(1.5, pal.border.gamma_multiply(1.6)),
+            );
         }
     }
     let depths = edit_blocks::depth_map(decor);

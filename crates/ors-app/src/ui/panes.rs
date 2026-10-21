@@ -211,14 +211,13 @@ pub fn status_bar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Act
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 14.0;
         let small = |t: String| RichText::new(t).size(12.0).color(pal.muted);
-        if let Some(mode) = mode {
-            if ui
+        if let Some(mode) = mode
+            && ui
                 .add(egui::Label::new(small(mode.label().into())).sense(Sense::click()))
                 .on_hover_text("Click to switch Live Preview / Source mode (Ctrl+E: reading view)")
                 .clicked()
-            {
-                actions.push(Action::Exec(Command::ToggleLivePreview));
-            }
+        {
+            actions.push(Action::Exec(Command::ToggleLivePreview));
         }
         if path.is_some() {
             ui.label(small(format!("{chars} characters")));
