@@ -210,6 +210,8 @@ pub struct AppState {
     pub add_property_requested: bool,
     /// Workspace area: tab groups, bookmarks, plugins, explorer, settings.
     pub ws: crate::workbench::Workbench,
+    /// Page / zoom of the PDF tabs.
+    pub pdf_views: HashMap<TabId, crate::pdf::PdfViewState>,
 }
 
 impl AppState {
@@ -249,6 +251,7 @@ impl AppState {
             editor: crate::editor::EditorState::default(),
             add_property_requested: false,
             ws: crate::workbench::Workbench::default(),
+            pdf_views: HashMap::new(),
             vault: {
                 if let Err(e) = vault.start_watching() {
                     eprintln!("file watcher unavailable: {e}");
@@ -345,6 +348,7 @@ impl AppState {
             return;
         }
         let tab = self.tabs.remove(i);
+        self.pdf_views.remove(&tab.id);
         if let TabContent::Note(n) = &tab.content {
             self.release_buffer(&n.path);
         }
