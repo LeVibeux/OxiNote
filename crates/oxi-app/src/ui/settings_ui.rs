@@ -375,6 +375,25 @@ fn editor_page(ui: &mut egui::Ui, state: &mut AppState) {
     );
     row(
         ui,
+        "Scroll speed",
+        "Sensitivity of the trackpad and the mouse wheel.",
+        |ui| {
+            ui.add(
+                egui::Slider::new(&mut s.scroll_speed, crate::scroll::SPEED_RANGE)
+                    .step_by(0.25)
+                    .suffix("×"),
+            );
+        },
+    );
+    // An app setting (saved with the window state), not a vault one.
+    toggle_row(
+        ui,
+        "Smooth scrolling",
+        "Glide over mouse wheel steps. Off: the page follows the trackpad at once, with no lag.",
+        &mut s.smooth_scrolling,
+    );
+    row(
+        ui,
         "Autosave delay",
         "Seconds of inactivity before a note is saved.",
         |ui| {

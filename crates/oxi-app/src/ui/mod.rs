@@ -961,6 +961,17 @@ impl eframe::App for OxinoteApp {
         self.handle_screenshot(&ctx);
     }
 
+    fn raw_input_hook(&mut self, ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        let s = self.state.as_ref().map_or(&self.settings, |s| &s.settings);
+        let line = ctx.options(|o| o.input_options.line_scroll_speed);
+        crate::scroll::adjust_wheel_events(
+            &mut raw_input.events,
+            s.scroll_speed,
+            s.smooth_scrolling,
+            line,
+        );
+    }
+
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         let settings = self.state.as_ref().map_or(&self.settings, |s| &s.settings);
         eframe::set_value(storage, "settings", settings);

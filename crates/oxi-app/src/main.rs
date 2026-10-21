@@ -29,6 +29,7 @@ mod pdf;
 mod plugins;
 mod properties_model;
 mod reading;
+mod scroll;
 mod settings;
 mod state;
 mod ui;
