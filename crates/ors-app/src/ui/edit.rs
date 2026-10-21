@@ -1607,26 +1607,51 @@ fn paint_widgets(
 // Find / replace bar
 // ---------------------------------------------------------------------------
 
-/// The find bar above the editor (no-op when closed).
+/// The find bar above the editor or the reading view (no-op when closed).
+/// In the reading view it searches the rendered text and cannot replace.
 pub fn find_bar(
     ui: &mut egui::Ui,
     state: &mut AppState,
     caches: &mut UiCaches,
     tab_id: TabId,
     path: &NotePath,
+    reading: bool,
     actions: &mut Vec<Action>,
 ) {
+    // The editor opens the bar itself (it pre-fills the selection).
+    let open = |c: &Command| matches!(c, Command::FindInNote | Command::ReplaceInNote);
+    if reading && state.editor.pending.iter().any(open) {
+        state.editor.pending.retain(|c| !open(c));
+        let mut f = match caches.find.take() {
+            Some(f) if f.tab == tab_id => f,
+            _ => FindUi {
+                tab: tab_id,
+                ..FindUi::default()
+            },
+        };
+        f.focus = true;
+        caches.find = Some(f);
+    }
+    match &caches.find {
+        Some(f) if f.tab == tab_id => {}
+        Some(_) => {
+            caches.find = None;
+            return;
+        }
+        None => return,
+    }
+    let text = if reading {
+        super::reading_view::search_text(state, caches, path)
+    } else {
+        match state.buffers.get(path) {
+            Some(b) => b.text.clone(),
+            None => return,
+        }
+    };
     let Some(f) = caches.find.as_mut() else {
         return;
     };
-    if f.tab != tab_id {
-        caches.find = None;
-        return;
-    }
     let pal = Palette::of(ui.ctx());
-    let Some(text) = state.buffers.get(path).map(|b| b.text.clone()) else {
-        return;
-    };
     let mut matches = find_all(&text, &f.query, f.case);
     if f.current >= matches.len() {
         f.current = 0;
@@ -1691,10 +1716,11 @@ pub fn find_bar(
                     matches = find_all(&text, &f.query, f.case);
                     f.current = 0;
                 }
-                if ui
-                    .selectable_label(f.show_replace, "Replace")
-                    .on_hover_text("Search & replace (Ctrl+H)")
-                    .clicked()
+                if !reading
+                    && ui
+                        .selectable_label(f.show_replace, "Replace")
+                        .on_hover_text("Search & replace (Ctrl+H)")
+                        .clicked()
                 {
                     f.show_replace = !f.show_replace;
                 }
@@ -1702,7 +1728,7 @@ pub fn find_bar(
                     close = true;
                 }
             });
-            if f.show_replace {
+            if f.show_replace && !reading {
                 ui.horizontal(|ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut f.replace)

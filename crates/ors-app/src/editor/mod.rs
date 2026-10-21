@@ -247,11 +247,12 @@ impl AppState {
                 self.save_vault_settings();
             }
             c if is_editor_command(c) => {
-                let editing = self
-                    .active_tab()
-                    .and_then(|t| t.note())
-                    .is_some_and(|n| n.mode == crate::state::ViewMode::Source);
-                if editing {
+                let mode = self.active_tab().and_then(|t| t.note()).map(|n| n.mode);
+                // The reading view only takes the find bar.
+                let find = matches!(c, Command::FindInNote | Command::ReplaceInNote);
+                if mode == Some(crate::state::ViewMode::Source)
+                    || (find && mode == Some(crate::state::ViewMode::Reading))
+                {
                     self.editor.pending.push(c);
                 }
             }

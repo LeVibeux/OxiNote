@@ -823,7 +823,8 @@ fn frame_texts(app: &mut ObsiApp, ctx: &egui::Context, events: Vec<Event>) -> Ve
         events,
         ..RawInput::default()
     };
-    let out = ctx.run_ui(input, |ui| app.workspace(ui));
+    let mut out = ctx.run_ui(input, |ui| app.workspace(ui));
+    out.textures_delta.clear();
     let mut texts = Vec::new();
     for s in &out.shapes {
         collect(&s.shape, &mut texts);
@@ -892,4 +893,44 @@ fn right_sidebar_collapses_from_its_header_and_reopens_from_the_tab_bar() {
     let r = toggle(frame_texts(&mut app, &ctx, Vec::new())).expect("tab bar toggle");
     click_pos(&mut app, &ctx, r.center());
     assert!(state(&mut app).settings.right_open);
+}
+
+#[test]
+fn ctrl_f_searches_the_reading_view() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    let path = open_empty(&mut app, &ctx);
+    state(&mut app).buffers.get_mut(&path).expect("buffer").text =
+        "Alpha beta alpha\n\n- alpha item\n\n```\nalpha code\n```\n\n> [!note]- Folded\n> alpha hidden\n"
+            .to_string();
+    state(&mut app).buffer_edited(&path);
+    state(&mut app).set_display_mode(DisplayMode::Reading);
+    frames(&mut app, &ctx, 3);
+    frame(&mut app, &ctx, vec![key(Key::F, Modifiers::COMMAND)]);
+    frames(&mut app, &ctx, 2);
+    assert!(
+        app.caches.find.is_some(),
+        "Ctrl+F did not open the find bar"
+    );
+    frame(&mut app, &ctx, vec![Event::Text("alpha".into())]);
+    let texts = frame_texts(&mut app, &ctx, Vec::new());
+    let has = |t: &str| texts.iter().any(|(s, _)| s == t);
+    // Paragraph (2, case-insensitive), list, code block, folded callout.
+    assert!(
+        has("1 of 5"),
+        "{:?}",
+        texts.iter().map(|t| &t.0).collect::<Vec<_>>()
+    );
+    // The matches are drawn as their own highlighted labels.
+    assert!(has("Alpha") && has(" item"));
+    for _ in 0..4 {
+        frame(&mut app, &ctx, vec![key(Key::Enter, Modifiers::NONE)]);
+    }
+    let texts = frame_texts(&mut app, &ctx, Vec::new());
+    assert!(texts.iter().any(|(s, _)| s == "5 of 5"));
+    // The last match is in the folded callout, which opened to show it.
+    assert!(texts.iter().any(|(s, _)| s == " hidden"));
+    frame(&mut app, &ctx, vec![key(Key::Escape, Modifiers::NONE)]);
+    frames(&mut app, &ctx, 2);
+    assert!(app.caches.find.is_none());
 }
