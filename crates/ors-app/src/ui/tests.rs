@@ -590,6 +590,26 @@ fn source_mode_shows_frontmatter_and_hides_no_marker() {
     );
 }
 
+#[test]
+fn live_preview_hides_the_frontmatter_when_the_caret_is_on_line_one() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("fm-line1");
+    let text = "---\ntitle: T\ntags: [a]\n---\n# Titre\n\ntexte\n";
+    // `open_at_line(.., 0, ..)` puts the caret at the very start (line 1).
+    open_with_text(&mut app, &ctx, "Fm.md", text);
+    frames(&mut app, &ctx, 4);
+    let tab = state(&mut app).active_tab().expect("tab").id;
+    let (_, job) = &app.caches.highlight[&tab];
+    let yaml_end = text.find("# Titre").expect("heading");
+    let visible_yaml = job
+        .sections
+        .iter()
+        .filter(|s| usize::from(s.byte_range.start) < yaml_end)
+        .filter(|s| s.format.font_id.size >= 1.0 && s.format.color != egui::Color32::TRANSPARENT)
+        .count();
+    assert_eq!(visible_yaml, 0, "the YAML must stay hidden: {job:?}");
+}
+
 /// A note with `n` sections of a few lines each.
 fn long_note(n: usize) -> String {
     let mut t = String::new();
