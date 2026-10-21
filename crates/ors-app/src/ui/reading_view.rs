@@ -4,14 +4,17 @@
 use std::cell::{Cell, RefCell};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::ops::Range;
 use std::rc::Rc;
 
-use eframe::egui::{self, Align, FontId, Frame, Margin, RichText, Sense, Stroke};
+use eframe::egui::text::{LayoutJob, TextFormat};
+use eframe::egui::{self, Align, FontId, Frame, Margin, Rect, RichText, Sense, Stroke};
 use ors_core::{NotePath, Subpath};
 
 use super::editor::{is_image, readable_column};
 use super::theme::Palette;
 use super::{Action, UiCaches};
+use crate::editor::find::find_all;
 use crate::reading::{
     Block, EmbedKey, EmbedPlan, Inline, InlineKind, LinkRef, Prepared, callout_family,
     callout_icon, embed_plan, parse_blocks, prepare, ref_index,
@@ -81,6 +84,19 @@ pub struct Ctx<'a> {
     no_wrap: Cell<bool>,
     /// Screen `y` of the headings of the note (for the heading navigator).
     heading_ys: RefCell<Vec<Option<f32>>>,
+    /// Find bar matches to highlight (the note itself only).
+    find: Option<FindHl>,
+    /// Matches drawn (or skipped) so far, in document order.
+    find_n: Cell<usize>,
+}
+
+/// The find bar as the reading view sees it.
+struct FindHl {
+    query: String,
+    case: bool,
+    current: usize,
+    /// Scroll to the current match (once).
+    reveal: Cell<bool>,
 }
 
 impl<'a> Ctx<'a> {
@@ -101,6 +117,8 @@ impl<'a> Ctx<'a> {
             current_line: Cell::new(None),
             no_wrap: Cell::new(false),
             heading_ys: RefCell::new(Vec::new()),
+            find: None,
+            find_n: Cell::new(0),
         }
     }
 }
@@ -152,6 +170,17 @@ pub fn reading_view(
     let pal = Palette::of(ui.ctx());
     let size = state.settings.font_size;
     let clip_top = ui.clip_rect().top();
+    let active = state.active_tab().map(|t| t.id);
+    let find = caches
+        .find
+        .as_mut()
+        .filter(|f| Some(f.tab) == active && !f.query.is_empty())
+        .map(|f| FindHl {
+            query: f.query.clone(),
+            case: f.case,
+            current: f.current,
+            reveal: Cell::new(f.reveal.take().is_some()),
+        });
     let mut current = None;
     readable_column(ui, state.settings.readable_line_length, |ui| {
         ui.add_space(8.0);
@@ -185,6 +214,8 @@ pub fn reading_view(
             current_line: Cell::new(None),
             no_wrap: Cell::new(false),
             heading_ys: RefCell::new(vec![None; prepared.heading_lines.len()]),
+            find,
+            find_n: Cell::new(0),
         };
         draw_blocks(ui, &cx, caches, &blocks, actions);
         caches.nav.ys = Some(cx.heading_ys.take());
@@ -269,9 +300,14 @@ fn draw_blocks_culled(
         let top = ui.cursor().top();
         let (headings, tasks, callouts) = counts(std::slice::from_ref(b));
         let first = cx.heading_n.get();
+        let found = find_count(cx, std::slice::from_ref(b));
+        let first_found = cx.find_n.get();
         let wanted = cx
             .scroll_heading
-            .is_some_and(|h| (first..first + headings).contains(&h));
+            .is_some_and(|h| (first..first + headings).contains(&h))
+            || cx.find.as_ref().is_some_and(|f| {
+                f.reveal.get() && (first_found..first_found + found).contains(&f.current)
+            });
         if let Some(h) = known.as_ref().and_then(|k| k.get(i).copied())
             && !wanted
             && (top + h < lo || top > hi)
@@ -291,6 +327,7 @@ fn draw_blocks_culled(
             cx.heading_n.set(first + headings);
             cx.task_n.set(cx.task_n.get() + tasks);
             cx.callout_n.set(cx.callout_n.get() + callouts);
+            cx.find_n.set(first_found + found);
             ui.add_space(h);
             heights.push(h);
             continue;
@@ -353,12 +390,39 @@ fn draw_block(
                     if !lang.is_empty() {
                         ui.label(RichText::new(lang).small().color(pal.faint));
                     }
-                    ui.label(
-                        RichText::new(text)
-                            .monospace()
-                            .size(cx.size * 0.9)
-                            .color(pal.text),
-                    );
+                    let marks = find_marks(cx, text);
+                    if marks.is_empty() {
+                        ui.label(
+                            RichText::new(text)
+                                .monospace()
+                                .size(cx.size * 0.9)
+                                .color(pal.text),
+                        );
+                    } else {
+                        let format = TextFormat {
+                            font_id: FontId::monospace(cx.size * 0.9),
+                            color: pal.text,
+                            ..TextFormat::default()
+                        };
+                        let mut job = LayoutJob::default();
+                        let mut pos = 0;
+                        for (r, cur) in &marks {
+                            job.append(&text[pos..r.start], 0.0, format.clone());
+                            let background = mark_color(&pal, *cur);
+                            job.append(
+                                &text[r.clone()],
+                                0.0,
+                                TextFormat {
+                                    background,
+                                    ..format.clone()
+                                },
+                            );
+                            pos = r.end;
+                        }
+                        job.append(&text[pos..], 0.0, format);
+                        let rect = ui.label(job).rect;
+                        reveal(ui, cx, &marks, Some(rect));
+                    }
                 });
             ui.add_space(cx.size * 0.5);
         }
@@ -393,6 +457,13 @@ fn draw_block(
                 id,
                 *fold != Some(true),
             );
+            // The current find match is in the folded body: open it.
+            if let Some(f) = cx.find.as_ref().filter(|f| f.reveal.get()) {
+                let start = cx.find_n.get() + find_all(title, &f.query, f.case).len();
+                if (start..start + find_count(cx, blocks)).contains(&f.current) {
+                    state.set_open(true);
+                }
+            }
             Frame::new()
                 .fill(color.gamma_multiply(0.12))
                 .corner_radius(6)
@@ -402,7 +473,11 @@ fn draw_block(
                     let foldable = fold.is_some();
                     let head = ui.horizontal(|ui| {
                         ui.label(RichText::new(callout_icon(kind)).color(color).size(cx.size));
-                        ui.label(RichText::new(title).color(color).size(cx.size).strong());
+                        let marks = find_marks(cx, title);
+                        let rect = marked_labels(ui, title, &marks, &pal, |t| {
+                            RichText::new(t).color(color).size(cx.size).strong()
+                        });
+                        reveal(ui, cx, &marks, rect);
                         if foldable {
                             let arrow = if state.is_open() { "⏷" } else { "⏵" };
                             ui.with_layout(
@@ -423,6 +498,7 @@ fn draw_block(
                         draw_blocks(ui, cx, caches, blocks, actions);
                     } else {
                         let d = counts(blocks);
+                        cx.find_n.set(cx.find_n.get() + find_count(cx, blocks));
                         cx.heading_n.set(cx.heading_n.get() + d.0);
                         cx.task_n.set(cx.task_n.get() + d.1);
                         cx.callout_n.set(cx.callout_n.get() + d.2);
@@ -600,7 +676,12 @@ fn draw_inline(
     let pal = cx.pal;
     match &inline.kind {
         InlineKind::Text => {
-            ui.label(rich(&inline.text, inline, size, strong, &pal));
+            let text = inline.text.replace('\n', " ");
+            let marks = find_marks(cx, &text);
+            let rect = marked_labels(ui, &text, &marks, &pal, |t| {
+                rich(t, inline, size, strong, &pal)
+            });
+            reveal(ui, cx, &marks, rect);
         }
         InlineKind::LineBreak => ui.end_row(),
         InlineKind::Link(url) => match ref_index(url).and_then(|i| cx.prepared.refs.get(i)) {
@@ -614,14 +695,15 @@ fn draw_inline(
                 } else {
                     pal.unresolved
                 };
+                let marks = find_marks(cx, &inline.text.replace('\n', " "));
+                let mut label = rich(&inline.text, inline, size, strong, &pal).color(color);
+                if let Some(bg) = link_mark(&pal, &marks) {
+                    label = label.background_color(bg);
+                }
                 let r = ui
-                    .add(
-                        egui::Label::new(
-                            rich(&inline.text, inline, size, strong, &pal).color(color),
-                        )
-                        .sense(Sense::click()),
-                    )
+                    .add(egui::Label::new(label).sense(Sense::click()))
                     .on_hover_cursor(egui::CursorIcon::PointingHand);
+                reveal(ui, cx, &marks, Some(r.rect));
                 // Ctrl held: preview of the note; otherwise a plain tooltip.
                 let preview = ui
                     .input(|i| i.modifiers.command)
@@ -692,15 +774,172 @@ fn draw_inline(
                 }
             }
             _ => {
-                ui.hyperlink_to(
-                    rich(&inline.text, inline, size, strong, &pal).color(pal.accent),
-                    url,
-                );
+                let marks = find_marks(cx, &inline.text.replace('\n', " "));
+                let mut label = rich(&inline.text, inline, size, strong, &pal).color(pal.accent);
+                if let Some(bg) = link_mark(&pal, &marks) {
+                    label = label.background_color(bg);
+                }
+                let r = ui.hyperlink_to(label, url);
+                reveal(ui, cx, &marks, Some(r.rect));
             }
         },
         InlineKind::Image { url } => {
             ui.hyperlink_to(&inline.text, url);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Find in the reading view
+// ---------------------------------------------------------------------------
+
+/// The searchable texts of `blocks`, in the order the view draws them (the
+/// find bar counts its matches in them; drawing highlights the same ones).
+fn find_pieces(prepared: &Prepared, blocks: &[Block], out: &mut Vec<String>) {
+    for b in blocks {
+        match b {
+            Block::Heading { inlines, .. } | Block::Paragraph(inlines) => {
+                inline_pieces(prepared, inlines, out);
+            }
+            Block::Code { text, .. } => out.push(text.clone()),
+            Block::Quote(inner) => find_pieces(prepared, inner, out),
+            Block::Callout { title, blocks, .. } => {
+                out.push(title.clone());
+                find_pieces(prepared, blocks, out);
+            }
+            Block::List { items, .. } => {
+                for it in items {
+                    find_pieces(prepared, &it.blocks, out);
+                }
+            }
+            Block::Table { header, rows } => {
+                for cell in header.iter().chain(rows.iter().flatten()) {
+                    inline_pieces(prepared, cell, out);
+                }
+            }
+            Block::Rule => {}
+        }
+    }
+}
+
+/// Mirrors [`inline_row`]: embeds and leading blank texts are not drawn as
+/// text, tags are not searched.
+fn inline_pieces(prepared: &Prepared, inlines: &[Inline], out: &mut Vec<String>) {
+    let mut run_empty = true;
+    for inline in inlines {
+        match &inline.kind {
+            InlineKind::Image { .. } => {
+                run_empty = true;
+                continue;
+            }
+            InlineKind::Text if run_empty && inline.text.trim().is_empty() => continue,
+            InlineKind::Text => out.push(inline.text.replace('\n', " ")),
+            InlineKind::Link(url) => {
+                if !matches!(
+                    ref_index(url).and_then(|i| prepared.refs.get(i)),
+                    Some(LinkRef::Tag(_))
+                ) {
+                    out.push(inline.text.replace('\n', " "));
+                }
+            }
+            InlineKind::LineBreak => {}
+        }
+        run_empty = false;
+    }
+}
+
+/// The text the find bar searches in the reading view: the pieces, kept
+/// apart so that no match spans two of them.
+pub fn search_text(state: &AppState, caches: &mut UiCaches, path: &NotePath) -> String {
+    let text = state.note_text(path).unwrap_or_default();
+    let (prepared, blocks) = rendered(state, caches, path, &text);
+    let mut pieces = Vec::new();
+    find_pieces(&prepared, &blocks, &mut pieces);
+    pieces.join("\u{0}")
+}
+
+/// Number of find matches in `blocks`.
+fn find_count(cx: &Ctx<'_>, blocks: &[Block]) -> usize {
+    let Some(f) = &cx.find else {
+        return 0;
+    };
+    let mut pieces = Vec::new();
+    find_pieces(cx.prepared, blocks, &mut pieces);
+    pieces
+        .iter()
+        .map(|p| find_all(p, &f.query, f.case).len())
+        .sum()
+}
+
+/// The next find matches, in `text` (which is drawn now): ranges, and
+/// whether each is the current one.
+fn find_marks(cx: &Ctx<'_>, text: &str) -> Vec<(Range<usize>, bool)> {
+    let Some(f) = &cx.find else {
+        return Vec::new();
+    };
+    let first = cx.find_n.get();
+    let found = find_all(text, &f.query, f.case);
+    cx.find_n.set(first + found.len());
+    found
+        .into_iter()
+        .enumerate()
+        .map(|(i, r)| (r, first + i == f.current))
+        .collect()
+}
+
+fn mark_color(pal: &Palette, current: bool) -> egui::Color32 {
+    if current {
+        pal.accent.gamma_multiply(0.55)
+    } else {
+        pal.highlight_bg
+    }
+}
+
+/// Background of a link label holding matches (links stay one widget).
+fn link_mark(pal: &Palette, marks: &[(Range<usize>, bool)]) -> Option<egui::Color32> {
+    (!marks.is_empty()).then(|| mark_color(pal, marks.iter().any(|m| m.1)))
+}
+
+/// `text` as labels, the matches highlighted; the rect of the current one.
+fn marked_labels(
+    ui: &mut egui::Ui,
+    text: &str,
+    marks: &[(Range<usize>, bool)],
+    pal: &Palette,
+    make: impl Fn(&str) -> RichText,
+) -> Option<Rect> {
+    if marks.is_empty() {
+        ui.label(make(text));
+        return None;
+    }
+    let mut pos = 0;
+    let mut current = None;
+    for (r, cur) in marks {
+        if r.start > pos {
+            ui.label(make(&text[pos..r.start]));
+        }
+        let rect = ui
+            .label(make(&text[r.clone()]).background_color(mark_color(pal, *cur)))
+            .rect;
+        if *cur {
+            current = Some(rect);
+        }
+        pos = r.end;
+    }
+    if pos < text.len() {
+        ui.label(make(&text[pos..]));
+    }
+    current
+}
+
+/// Scroll to the current match once, when the find bar asked for it.
+fn reveal(ui: &egui::Ui, cx: &Ctx<'_>, marks: &[(Range<usize>, bool)], rect: Option<Rect>) {
+    if let (Some(f), Some(rect)) = (&cx.find, rect)
+        && f.reveal.get()
+        && marks.iter().any(|m| m.1)
+    {
+        ui.scroll_to_rect(rect, Some(Align::Center));
+        f.reveal.set(false);
     }
 }
 

@@ -714,8 +714,9 @@ fn leaf_content(
             } else {
                 None
             };
-            if mode == ViewMode::Source && path.is_markdown() {
-                edit::find_bar(ui, state, caches, tab_id, &path, actions);
+            if path.is_markdown() {
+                let reading = mode == ViewMode::Reading;
+                edit::find_bar(ui, state, caches, tab_id, &path, reading, actions);
             }
             let heads = (path.is_markdown()
                 && state.settings.heading_navigator != crate::settings::HeadingNavigator::Off)
