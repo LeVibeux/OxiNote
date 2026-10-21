@@ -247,3 +247,71 @@ fn explorer_dims_ignored_files() {
     let s = app.state.as_ref().expect("vault");
     assert!(!s.git.ignored.contains("a.md"));
 }
+
+/// Texts drawn in the status bar (bottom strip) of a 1000x700 window.
+fn status_texts(app: &mut ObsiApp, ctx: &egui::Context) -> Vec<(String, Rect)> {
+    let input = RawInput {
+        screen_rect: Some(Rect::from_min_size(
+            pos2(0.0, 0.0),
+            egui::vec2(1000.0, 700.0),
+        )),
+        ..RawInput::default()
+    };
+    let mut out = ctx.run_ui(input, |ui| app.workspace(ui));
+    out.textures_delta.clear();
+    let mut texts = Vec::new();
+    for s in &out.shapes {
+        collect(&s.shape, &mut texts);
+    }
+    texts.retain(|(_, r)| r.center().y > 675.0);
+    texts
+}
+
+fn open_a(app: &mut ObsiApp) {
+    let s = app.state.as_mut().expect("vault");
+    let path = ors_core::NotePath::new("a.md").expect("path");
+    s.open(&path, OpenIn::CurrentTab);
+}
+
+#[test]
+fn status_bar_git_item_does_not_overlap_and_is_hidden_without_a_repo() {
+    if !git_available() {
+        eprintln!("git absent: test ignoré");
+        return;
+    }
+    // Not a repository: nothing about Git in the status bar.
+    let dir = vault_dir();
+    let mut app = app_on(dir.path());
+    let ctx = egui::Context::default();
+    open_a(&mut app);
+    wait_for(&mut app, &ctx, "repository detection", |s| s.git.checked);
+    let texts = status_texts(&mut app, &ctx);
+    assert!(find(&texts, "words").is_some(), "{texts:?}");
+    for t in ["Git", "modification", "Sauvegard"] {
+        assert!(find(&texts, t).is_none(), "{t} in {texts:?}");
+    }
+
+    // A repository with an uncommitted edit: the item shows and nothing
+    // overlaps at 1000 px.
+    let dir = vault_dir();
+    git_backup::init_repo(dir.path()).expect("init");
+    std::fs::write(dir.path().join("a.md"), "# A\nv2\n").expect("write");
+    let mut app = app_on(dir.path());
+    let ctx = egui::Context::default();
+    open_a(&mut app);
+    wait_for(&mut app, &ctx, "pending changes", |s| {
+        s.git.changes.is_some_and(|n| n > 0)
+    });
+    let texts = status_texts(&mut app, &ctx);
+    assert!(find(&texts, "modification").is_some(), "{texts:?}");
+    assert!(find(&texts, "words").is_some(), "{texts:?}");
+    assert!(find(&texts, "Live Preview").is_some(), "{texts:?}");
+    for (i, (a, ra)) in texts.iter().enumerate() {
+        for (b, rb) in texts.iter().skip(i + 1) {
+            assert!(
+                !ra.shrink(0.5).intersects(rb.shrink(0.5)),
+                "{a:?} {ra:?} overlaps {b:?} {rb:?}"
+            );
+        }
+    }
+}
