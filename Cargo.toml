@@ -6,14 +6,14 @@ members = ["crates/*"]
 version = "0.2.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/LeVibeux/ObsiRust"
+repository = "https://github.com/LeVibeux/Oxinote"
 
 [workspace.dependencies]
-ors-core = { path = "crates/ors-core" }
-ors-markdown = { path = "crates/ors-markdown" }
-ors-vault = { path = "crates/ors-vault" }
-ors-index = { path = "crates/ors-index" }
-ors-graph = { path = "crates/ors-graph" }
+oxi-core = { path = "crates/oxi-core" }
+oxi-markdown = { path = "crates/oxi-markdown" }
+oxi-vault = { path = "crates/oxi-vault" }
+oxi-index = { path = "crates/oxi-index" }
+oxi-graph = { path = "crates/oxi-graph" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

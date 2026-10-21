@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Build a Debian/Ubuntu package of ObsiRust (app + CLI).
+# Build a Debian/Ubuntu package of Oxinote (app + CLI).
 #
 #   scripts/build-deb.sh BIN_DIR VERSION [OUT_DIR]
 #
-# BIN_DIR holds the `obsirust-app` and `obsirust` binaries (for example
+# BIN_DIR holds the `oxinote-app` and `oxinote` binaries (for example
 # target/x86_64-unknown-linux-gnu/release). VERSION is the release version,
 # with or without a leading `v` (`0.1.0`, `v0.1.0-rc.1`). The package lands in
-# OUT_DIR (default: current directory) as obsirust_<version>_amd64.deb.
+# OUT_DIR (default: current directory) as oxinote_<version>_amd64.deb.
 set -euo pipefail
 
 bin_dir=${1:?usage: build-deb.sh BIN_DIR VERSION [OUT_DIR]}
@@ -21,26 +21,26 @@ arch=$(dpkg --print-architecture)
 
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
-pkg="$stage/obsirust"
+pkg="$stage/oxinote"
 
-install -Dm755 "$bin_dir/obsirust-app" "$pkg/usr/bin/obsirust-app"
-install -Dm755 "$bin_dir/obsirust" "$pkg/usr/bin/obsirust"
-install -Dm644 "$root/assets/linux/obsirust.desktop" \
-  "$pkg/usr/share/applications/obsirust.desktop"
+install -Dm755 "$bin_dir/oxinote-app" "$pkg/usr/bin/oxinote-app"
+install -Dm755 "$bin_dir/oxinote" "$pkg/usr/bin/oxinote"
+install -Dm644 "$root/assets/linux/oxinote.desktop" \
+  "$pkg/usr/share/applications/oxinote.desktop"
 for size in 16 32 48 64 128 256 512; do
-  install -Dm644 "$root/assets/logo/obsirust-icon-$size.png" \
-    "$pkg/usr/share/icons/hicolor/${size}x${size}/apps/obsirust.png"
+  install -Dm644 "$root/assets/logo/oxinote-icon-$size.png" \
+    "$pkg/usr/share/icons/hicolor/${size}x${size}/apps/oxinote.png"
 done
-install -Dm644 "$root/README.md" "$pkg/usr/share/doc/obsirust/README.md"
-cat > "$pkg/usr/share/doc/obsirust/copyright" <<'EOF'
+install -Dm644 "$root/README.md" "$pkg/usr/share/doc/oxinote/README.md"
+cat > "$pkg/usr/share/doc/oxinote/copyright" <<'EOF'
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: ObsiRust
-Source: https://github.com/LeVibeux/ObsiRust
+Upstream-Name: Oxinote
+Source: https://github.com/LeVibeux/Oxinote
 
 Files: *
 License: MIT or Apache-2.0
 
-Files: usr/bin/obsirust-app
+Files: usr/bin/oxinote-app
 Comment: embeds the Inter font (SIL Open Font License 1.1) and the
  Phosphor icon font (MIT).
 EOF
@@ -49,31 +49,36 @@ EOF
 mkdir -p "$stage/debian"
 touch "$stage/debian/control"
 shlibs=$(cd "$stage" && dpkg-shlibdeps -O \
-  "$pkg/usr/bin/obsirust-app" "$pkg/usr/bin/obsirust" 2>/dev/null |
+  "$pkg/usr/bin/oxinote-app" "$pkg/usr/bin/oxinote" 2>/dev/null |
   sed -n 's/^shlibs:Depends=//p')
 installed_size=$(du -sk "$pkg" | cut -f1)
 
 mkdir -p "$pkg/DEBIAN"
+# The package was called obsirust up to 0.2.x: Conflicts/Replaces make
+# installing this one remove it.
 cat > "$pkg/DEBIAN/control" <<EOF
-Package: obsirust
+Package: oxinote
 Version: $version
 Architecture: $arch
-Maintainer: ObsiRust <https://github.com/LeVibeux/ObsiRust>
+Maintainer: Oxinote <https://github.com/LeVibeux/Oxinote>
 Installed-Size: $installed_size
 Depends: ${shlibs:-libc6}, libgl1 | libegl1, libxkbcommon0
 Recommends: libxkbcommon-x11-0, libwayland-client0, libx11-6, libxcursor1, libxrandr2, libxi6, xdg-desktop-portal
 Suggests: git
+Conflicts: obsirust
+Replaces: obsirust
+Provides: obsirust
 Section: editors
 Priority: optional
-Homepage: https://github.com/LeVibeux/ObsiRust
+Homepage: https://github.com/LeVibeux/Oxinote
 Description: Obsidian-compatible Markdown knowledge base, written in Rust
- ObsiRust opens existing Obsidian vaults: Live Preview, Source and Reading
+ Oxinote opens existing Obsidian vaults: Live Preview, Source and Reading
  modes, wikilinks and backlinks, graph view, typed properties and tags,
  search, PDF viewer and a local Git backup. The package also installs the
- obsirust command-line tool.
+ oxinote command-line tool.
 EOF
 
 mkdir -p "$out_dir"
-deb="$out_dir/obsirust_${version}_${arch}.deb"
+deb="$out_dir/oxinote_${version}_${arch}.deb"
 dpkg-deb --root-owner-group --build "$pkg" "$deb" >/dev/null
 echo "$deb"

@@ -4,7 +4,7 @@ tags: [hub]
 ---
 # Accueil
 
-Bienvenue dans le vault d'exemple d'**ObsiRust**. Voir [[Projets/ObsiRust|le projet]] et [[Idées]].
+Bienvenue dans le vault d'exemple d'**Oxinote**. Voir [[Projets/Oxinote|le projet]] et [[Idées]].
 
 Les notes du jour sont dans [[2026-10-20]]. Une note inexistante : [[Note fantôme]].
 

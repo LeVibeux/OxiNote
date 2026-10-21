@@ -1,1 +1,1 @@
-Une note sans aucun lien, mais qui parle de Rust et de ObsiRust.
+Une note sans aucun lien, mais qui parle de Rust et de Oxinote.

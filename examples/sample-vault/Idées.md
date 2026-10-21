@@ -1,7 +1,7 @@
 ---
 tags:
   - idée
-  - projet/obsirust
+  - projet/oxinote
 status: brouillon
 related: "[[Accueil]]"
 ---
@@ -22,7 +22,7 @@ related: "[[Accueil]]"
 ## Embeds
 
 ![[diagramme.png]]
-![[Projets/ObsiRust#Architecture]]
+![[Projets/Oxinote#Architecture]]
 ![[Idées#^graphe]]
 
 Le code n'est pas parsé : `#pas-un-tag` et `[[pas un lien]]`.
