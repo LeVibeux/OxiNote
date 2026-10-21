@@ -214,6 +214,8 @@ pub struct AppState {
     pub pdf_views: HashMap<TabId, crate::pdf::PdfViewState>,
     /// Local Git backup of the vault (see `git_backup`).
     pub git: crate::git_backup::GitService,
+    /// Checks and installs of new releases (see `update`).
+    pub updates: crate::update::UpdateService,
 }
 
 impl AppState {
@@ -255,6 +257,7 @@ impl AppState {
             ws: crate::workbench::Workbench::default(),
             pdf_views: HashMap::new(),
             git: crate::git_backup::GitService::default(),
+            updates: crate::update::UpdateService::default(),
             vault: {
                 if let Err(e) = vault.start_watching() {
                     eprintln!("file watcher unavailable: {e}");
@@ -565,6 +568,7 @@ impl AppState {
         }
         self.toasts.retain(|t| now - t.created < 5.0);
         self.git_tick();
+        self.update_tick();
     }
 
     /// Seconds until the next autosave is due (for scheduling a repaint).

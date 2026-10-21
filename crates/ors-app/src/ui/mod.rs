@@ -265,11 +265,9 @@ impl ObsiApp {
         let path = path.canonicalize().unwrap_or(path);
         match DiskVault::open(&path) {
             Ok(v) => {
-                self.state = Some(AppState::new(
-                    Box::new(v),
-                    real_index,
-                    self.settings.clone(),
-                ));
+                let mut state = AppState::new(Box::new(v), real_index, self.settings.clone());
+                state.updates.enabled = self.startup.screenshot.is_none();
+                self.state = Some(state);
                 self.caches = UiCaches::default();
                 self.picker_error = None;
                 self.recent.push(path);

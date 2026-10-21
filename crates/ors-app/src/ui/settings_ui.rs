@@ -898,7 +898,7 @@ fn templates_page(ui: &mut egui::Ui, state: &mut AppState, win: &mut SettingsWin
     }
 }
 
-fn about_page(ui: &mut egui::Ui, state: &AppState) {
+fn about_page(ui: &mut egui::Ui, state: &mut AppState) {
     let pal = Palette::of(ui.ctx());
     ui.label(
         RichText::new("ObsiRust")
@@ -924,4 +924,81 @@ fn about_page(ui: &mut egui::Ui, state: &AppState) {
             .small()
             .color(pal.faint),
     );
+    ui.add_space(12.0);
+    updates_section(ui, state);
+}
+
+/// Settings > About: update mode, manual check and the current status.
+fn updates_section(ui: &mut egui::Ui, state: &mut AppState) {
+    use crate::update::{UpdateMode, UpdateStatus};
+    let pal = Palette::of(ui.ctx());
+    row(
+        ui,
+        "Mises à jour",
+        "Recherche une nouvelle version une fois par jour au démarrage.",
+        |ui| {
+            let mode = &mut state.settings.update_mode;
+            egui::ComboBox::from_id_salt("update-mode")
+                .selected_text(mode.label())
+                .show_ui(ui, |ui| {
+                    for m in UpdateMode::ALL {
+                        ui.selectable_value(mode, m, m.label());
+                    }
+                });
+        },
+    );
+    let status = state.updates.status.clone();
+    let text = match &status {
+        UpdateStatus::Idle => String::new(),
+        UpdateStatus::Checking => "Recherche en cours…".to_string(),
+        UpdateStatus::UpToDate => "ObsiRust est à jour.".to_string(),
+        UpdateStatus::Available(r) => format!("La version {} est disponible.", r.version),
+        UpdateStatus::Installing(v) => format!("Installation de {v}…"),
+        UpdateStatus::Installed(v) => {
+            format!("{v} est installée : redémarrez ObsiRust pour l'utiliser.")
+        }
+        UpdateStatus::Failed(e) => format!("Échec : {e}"),
+    };
+    ui.horizontal(|ui| {
+        if ui
+            .add_enabled(
+                !state.updates.busy(),
+                egui::Button::new("Rechercher maintenant"),
+            )
+            .clicked()
+        {
+            state.check_for_updates();
+        }
+        match &status {
+            UpdateStatus::Available(r) => {
+                if r.asset.is_some() && state.updates.can_install() {
+                    if ui.button(format!("Installer {}", r.version)).clicked() {
+                        state.install_update(r.clone());
+                    }
+                } else if ui.button("Ouvrir la page de téléchargement").clicked() {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(r.page.clone()));
+                }
+            }
+            UpdateStatus::Installed(_) => {
+                if ui.button("Redémarrer").clicked() {
+                    match crate::update::relaunch() {
+                        Ok(()) => ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close),
+                        Err(e) => state.error(format!("Redémarrage impossible : {e}")),
+                    }
+                }
+            }
+            UpdateStatus::Failed(_) if ui.button("Voir les versions").clicked() => {
+                ui.ctx()
+                    .open_url(egui::OpenUrl::new_tab(crate::update::releases_page()));
+            }
+            _ => {}
+        }
+    });
+    if !text.is_empty() {
+        ui.label(RichText::new(text).color(pal.muted));
+    }
+    if state.updates.busy() {
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(250));
+    }
 }

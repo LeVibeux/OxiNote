@@ -31,6 +31,7 @@ mod reading;
 mod settings;
 mod state;
 mod ui;
+mod update;
 mod util;
 mod views;
 mod workbench;
