@@ -3016,7 +3016,7 @@ dependencies = [
 
 [[package]]
 name = "oxi-app"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "directories",
@@ -3043,7 +3043,7 @@ dependencies = [
 
 [[package]]
 name = "oxi-cli"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3058,7 +3058,7 @@ dependencies = [
 
 [[package]]
 name = "oxi-core"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3067,14 +3067,14 @@ dependencies = [
 
 [[package]]
 name = "oxi-graph"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "oxi-core",
 ]
 
 [[package]]
 name = "oxi-index"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "oxi-core",
  "oxi-markdown",
@@ -3085,7 +3085,7 @@ dependencies = [
 
 [[package]]
 name = "oxi-markdown"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "oxi-core",
  "percent-encoding",
@@ -3096,7 +3096,7 @@ dependencies = [
 
 [[package]]
 name = "oxi-vault"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "notify-debouncer-full",
