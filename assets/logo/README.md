@@ -1,4 +1,4 @@
-# Logo Oxinote
+# Logo OxiNote
 
 | Fichier | Usage |
 |---|---|

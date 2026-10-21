@@ -9,8 +9,8 @@ const FILES: &[(&str, &str)] = &[
         "# Rust notes\n\n## Ownership\nEach value has an owner.\n\n## Borrowing\nReferences &T and &mut T.\n#rust",
     ),
     (
-        "Projets/Oxinote.md",
-        "# Oxinote\nPortage d'Obsidian en Rust.\n\n## Statut\n- [ ] écrire les tests\n- [x] parser rust\n- [/] recherche\n#projet/oxinote",
+        "Projets/OxiNote.md",
+        "# OxiNote\nPortage d'Obsidian en Rust.\n\n## Statut\n- [ ] écrire les tests\n- [x] parser rust\n- [/] recherche\n#projet/oxinote",
     ),
     (
         "Idées.md",
@@ -54,7 +54,7 @@ fn hits(q: &str) -> Vec<String> {
 fn single_term_case_insensitive_substring() {
     assert_eq!(
         hits("RUST"),
-        vec!["Idées.md", "Projets/Oxinote.md", "Rust notes.md"]
+        vec!["Idées.md", "Projets/OxiNote.md", "Rust notes.md"]
     );
     assert_eq!(hits("borrow"), vec!["Journal/2026.md", "Rust notes.md"]);
 }
@@ -81,9 +81,9 @@ fn or_and_groups() {
 fn negation() {
     assert_eq!(
         hits("rust -graphe"),
-        vec!["Projets/Oxinote.md", "Rust notes.md"]
+        vec!["Projets/OxiNote.md", "Rust notes.md"]
     );
-    assert_eq!(hits("rust -(graphe OR owner)"), vec!["Projets/Oxinote.md"]);
+    assert_eq!(hits("rust -(graphe OR owner)"), vec!["Projets/OxiNote.md"]);
     assert_eq!(hits("rust -\"en rust\""), vec!["Idées.md", "Rust notes.md"]);
 }
 
@@ -105,12 +105,12 @@ fn file_and_path_operators() {
     assert_eq!(hits("file:notes"), vec!["Rust notes.md"]);
     assert_eq!(
         hits("file:note"),
-        vec!["Projets/Oxinote.md", "Rust notes.md"]
+        vec!["Projets/OxiNote.md", "Rust notes.md"]
     );
     assert_eq!(hits("file:\"rust notes\""), vec!["Rust notes.md"]);
-    assert_eq!(hits("path:projets"), vec!["Projets/Oxinote.md"]);
+    assert_eq!(hits("path:projets"), vec!["Projets/OxiNote.md"]);
     assert_eq!(hits("path:Journal borrowing"), vec!["Journal/2026.md"]);
-    assert_eq!(hits("path:/^Pro/"), vec!["Projets/Oxinote.md"]);
+    assert_eq!(hits("path:/^Pro/"), vec!["Projets/OxiNote.md"]);
     assert_eq!(
         hits("file:(idées OR 2026)"),
         vec!["Idées.md", "Journal/2026.md"]
@@ -129,7 +129,7 @@ fn file_only_match_has_no_line_matches() {
 fn terms_match_file_name_with_bonus() {
     // "notes" only appears in the title of "Rust notes.md" (and its H1).
     let r = search("oxinote");
-    assert_eq!(r[0].path.as_str(), "Projets/Oxinote.md");
+    assert_eq!(r[0].path.as_str(), "Projets/OxiNote.md");
     let r = search("2026");
     // Matches only the file name: still a result.
     assert_eq!(r.len(), 1);
@@ -137,8 +137,8 @@ fn terms_match_file_name_with_bonus() {
 
 #[test]
 fn tag_operator_nested_and_case() {
-    assert_eq!(hits("tag:#projet"), vec!["Projets/Oxinote.md"]);
-    assert_eq!(hits("tag:PROJET/oxinote"), vec!["Projets/Oxinote.md"]);
+    assert_eq!(hits("tag:#projet"), vec!["Projets/OxiNote.md"]);
+    assert_eq!(hits("tag:PROJET/oxinote"), vec!["Projets/OxiNote.md"]);
     assert!(hits("tag:oxinote").is_empty());
     assert_eq!(
         hits("tag:rust OR tag:idée"),
@@ -163,7 +163,7 @@ fn section_operator() {
     // "owner" and "Ownership" share a section, "References" is elsewhere.
     assert_eq!(hits("section:(ownership owner)"), vec!["Rust notes.md"]);
     assert!(hits("section:(owner references)").is_empty());
-    assert_eq!(hits("section:(statut tests)"), vec!["Projets/Oxinote.md"]);
+    assert_eq!(hits("section:(statut tests)"), vec!["Projets/OxiNote.md"]);
 }
 
 #[test]
@@ -176,12 +176,12 @@ fn block_operator() {
 
 #[test]
 fn task_operators() {
-    assert_eq!(hits("task:rust"), vec!["Projets/Oxinote.md"]);
-    assert_eq!(hits("task-todo:tests"), vec!["Projets/Oxinote.md"]);
+    assert_eq!(hits("task:rust"), vec!["Projets/OxiNote.md"]);
+    assert_eq!(hits("task-todo:tests"), vec!["Projets/OxiNote.md"]);
     assert!(hits("task-todo:parser").is_empty());
-    assert_eq!(hits("task-done:parser"), vec!["Projets/Oxinote.md"]);
-    assert_eq!(hits("task-done:recherche"), vec!["Projets/Oxinote.md"]);
-    assert_eq!(hits("task:\"\""), vec!["Projets/Oxinote.md"]);
+    assert_eq!(hits("task-done:parser"), vec!["Projets/OxiNote.md"]);
+    assert_eq!(hits("task-done:recherche"), vec!["Projets/OxiNote.md"]);
+    assert_eq!(hits("task:\"\""), vec!["Projets/OxiNote.md"]);
     // The match range covers the term only.
     let r = search("task-todo:tests");
     let m = &r[0].matches[0];
@@ -207,7 +207,7 @@ fn regex_search() {
         hits("/borrow(ing)?/"),
         vec!["Journal/2026.md", "Rust notes.md"]
     );
-    assert_eq!(hits("/^## /"), vec!["Projets/Oxinote.md", "Rust notes.md"]);
+    assert_eq!(hits("/^## /"), vec!["Projets/OxiNote.md", "Rust notes.md"]);
     let (idx, cache) = setup();
     assert!(idx.search("/(unclosed/", &cache).is_err());
 }
@@ -216,14 +216,14 @@ fn regex_search() {
 fn match_case_operator() {
     assert_eq!(
         hits("match-case:Rust"),
-        vec!["Projets/Oxinote.md", "Rust notes.md"]
+        vec!["Projets/OxiNote.md", "Rust notes.md"]
     );
     assert_eq!(
         hits("match-case:rust"),
-        vec!["Idées.md", "Projets/Oxinote.md", "Rust notes.md"]
+        vec!["Idées.md", "Projets/OxiNote.md", "Rust notes.md"]
     );
     assert_eq!(hits("match-case:RUST"), Vec::<String>::new());
-    assert_eq!(hits("match-case:Portage"), vec!["Projets/Oxinote.md"]);
+    assert_eq!(hits("match-case:Portage"), vec!["Projets/OxiNote.md"]);
     assert!(hits("match-case:portage").is_empty());
 }
 

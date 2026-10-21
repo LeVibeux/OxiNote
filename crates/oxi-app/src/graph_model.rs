@@ -15,7 +15,7 @@ use crate::backend::{IndexBackend, LayoutEngine};
 /// File (relative to the vault's config folder) of the global graph settings.
 pub const GRAPH_FILE: &str = "graph.json";
 /// File of the local graph settings (Obsidian keeps those per leaf in
-/// `workspace.json`; Oxinote stores the defaults for new local graphs here).
+/// `workspace.json`; OxiNote stores the defaults for new local graphs here).
 pub const LOCAL_GRAPH_FILE: &str = "local-graph.json";
 
 /// `{"a": 1, "rgb": 14701138}` like Obsidian.

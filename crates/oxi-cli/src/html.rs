@@ -164,7 +164,7 @@ pub fn page(p: &Page) -> String {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="generator" content="Oxinote">
+<meta name="generator" content="OxiNote">
 <title>{title} - {vault}</title>
 <link rel="stylesheet" href="{prefix}style.css">
 </head>
@@ -684,7 +684,7 @@ fn render_embed(
 // ---------------------------------------------------------------- css
 
 /// Stylesheet of the exported site, close to Obsidian's reading view.
-pub const STYLE_CSS: &str = r#"/* Oxinote static export — reading view styles */
+pub const STYLE_CSS: &str = r#"/* OxiNote static export — reading view styles */
 :root {
   --background-primary: #ffffff;
   --background-secondary: #f6f6f6;
@@ -919,11 +919,11 @@ mod tests {
         let files = vec![
             p("Accueil.md"),
             p("attachments/diagramme.png"),
-            p("Projets/Oxinote.md"),
+            p("Projets/OxiNote.md"),
             p("Projets/Rust notes.md"),
             p("b.md"),
         ];
-        let html = file_tree(&files, "../", Some(&p("Projets/Oxinote.md")));
+        let html = file_tree(&files, "../", Some(&p("Projets/OxiNote.md")));
         // Folders first (sorted case-insensitively), then files.
         let attach = html.find("<summary>attachments</summary>").unwrap();
         let projets = html.find("<summary>Projets</summary>").unwrap();
@@ -932,7 +932,7 @@ mod tests {
         assert!(html.contains("<details open><summary>Projets</summary>"));
         assert!(html.contains("<details><summary>attachments</summary>"));
         assert!(html.contains(
-            "<li class=\"nav-file is-active\"><a href=\"../Projets/Oxinote.html\">Oxinote</a></li>"
+            "<li class=\"nav-file is-active\"><a href=\"../Projets/OxiNote.html\">OxiNote</a></li>"
         ));
         assert!(html.contains(
             "<li class=\"nav-file is-attachment\"><a href=\"../attachments/diagramme.png\">diagramme.png</a></li>"
@@ -950,12 +950,12 @@ mod tests {
         }
     }
 
-    const NOTE: &str = "# Oxinote\n\nIntro.\n\n## Architecture\n\nWorkspace Cargo.\n\n### Crates\n\nSept.\n\n## Statut\n\nOK.\n- item one ^item\n\nPara line 1\npara line 2 ^para\n\n| a |\n| - |\n\n^table";
+    const NOTE: &str = "# OxiNote\n\nIntro.\n\n## Architecture\n\nWorkspace Cargo.\n\n### Crates\n\nSept.\n\n## Statut\n\nOK.\n- item one ^item\n\nPara line 1\npara line 2 ^para\n\n| a |\n| - |\n\n^table";
 
     fn parsed_note() -> ParsedNote {
         ParsedNote {
             headings: vec![
-                heading(1, "Oxinote", 0),
+                heading(1, "OxiNote", 0),
                 heading(2, "Architecture", 4),
                 heading(3, "Crates", 8),
                 heading(2, "Statut", 12),
@@ -993,7 +993,7 @@ mod tests {
             "### Crates\n\nSept."
         );
         assert_eq!(
-            extract_section(NOTE, &parsed, "Oxinote#Statut").unwrap(),
+            extract_section(NOTE, &parsed, "OxiNote#Statut").unwrap(),
             "## Statut\n\nOK.\n- item one ^item\n\nPara line 1\npara line 2 ^para\n\n| a |\n| - |\n\n^table"
         );
         assert!(extract_section(NOTE, &parsed, "Crates#Architecture").is_none());

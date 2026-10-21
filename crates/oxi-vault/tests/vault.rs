@@ -48,7 +48,7 @@ fn list_files_of_sample_vault() {
             "Idées.md",
             "Journal/2026-10-20.md",
             "Orpheline.md",
-            "Projets/Oxinote.md",
+            "Projets/OxiNote.md",
             "Projets/Rust notes.md",
             "Templates/Daily.md",
             "attachments/diagramme.png",
@@ -331,7 +331,7 @@ fn sample_config_parsing() {
     assert_eq!(t.time_format.as_deref(), Some("HH:mm"));
 
     assert_eq!(v.list_templates().unwrap(), vec![p("Templates/Daily.md")]);
-    let note = p("Projets/Oxinote.md");
+    let note = p("Projets/OxiNote.md");
     assert_eq!(v.attachment_folder_for(Some(&note)).unwrap(), "attachments");
     assert_eq!(
         v.available_attachment_path(Some(&note), "diagramme.png")

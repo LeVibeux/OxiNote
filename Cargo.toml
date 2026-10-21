@@ -6,7 +6,7 @@ members = ["crates/*"]
 version = "0.2.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/LeVibeux/Oxinote"
+repository = "https://github.com/LeVibeux/OxiNote"
 
 [workspace.dependencies]
 oxi-core = { path = "crates/oxi-core" }

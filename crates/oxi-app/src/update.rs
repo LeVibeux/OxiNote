@@ -1,4 +1,4 @@
-//! Automatic updates from the GitHub releases of Oxinote.
+//! Automatic updates from the GitHub releases of OxiNote.
 //!
 //! At most once a day (and on demand from Settings > About), a background
 //! thread asks GitHub for the latest release. When it is newer than the
@@ -19,8 +19,8 @@ use sha2::{Digest, Sha256};
 
 use crate::state::AppState;
 
-const LATEST_URL: &str = "https://api.github.com/repos/LeVibeux/Oxinote/releases/latest";
-const RELEASES_PAGE: &str = "https://github.com/LeVibeux/Oxinote/releases";
+const LATEST_URL: &str = "https://api.github.com/repos/LeVibeux/OxiNote/releases/latest";
+const RELEASES_PAGE: &str = "https://github.com/LeVibeux/OxiNote/releases";
 const SUMS_FILE: &str = "SHA256SUMS.txt";
 /// Seconds between two automatic checks.
 const CHECK_EVERY: u64 = 24 * 3600;
@@ -76,7 +76,7 @@ pub struct Asset {
 pub enum InstallKind {
     /// Loose binaries in a folder (Linux archive, Windows zip).
     Portable { dir: PathBuf },
-    /// `…/Oxinote.app/Contents/MacOS/oxinote-app`.
+    /// `…/OxiNote.app/Contents/MacOS/oxinote-app`.
     MacBundle { app: PathBuf },
     /// Installed by a package manager: notify only.
     Managed,
@@ -423,9 +423,9 @@ pub fn install_archive(name: &str, archive: &[u8], kind: &InstallKind) -> Result
                     }
                 }
                 InstallKind::MacBundle { app } => {
-                    let new_app = top.join("Oxinote.app");
+                    let new_app = top.join("OxiNote.app");
                     if !new_app.is_dir() {
-                        return Err("Oxinote.app absent de l'archive".to_string());
+                        return Err("OxiNote.app absent de l'archive".to_string());
                     }
                     swap_in(&new_app, app)?;
                     let _ = fs::remove_dir_all(old_path(app));
@@ -477,7 +477,7 @@ fn get(url: &str) -> Result<Vec<u8>, String> {
     let agent: ureq::Agent = ureq::Agent::config_builder().tls_config(tls).build().into();
     let mut resp = agent
         .get(url)
-        .header("User-Agent", concat!("Oxinote/", env!("CARGO_PKG_VERSION")))
+        .header("User-Agent", concat!("OxiNote/", env!("CARGO_PKG_VERSION")))
         .header("Accept", "application/vnd.github+json, */*")
         .call()
         .map_err(|e| format!("connexion impossible : {e}"))?;
@@ -594,7 +594,7 @@ impl AppState {
                 Msg::Checked { manual, result } => self.on_checked(manual, result),
                 Msg::Installed(Ok(v)) => {
                     self.info(format!(
-                        "Oxinote {v} est installé : redémarrez pour l'utiliser (Réglages › About)."
+                        "OxiNote {v} est installé : redémarrez pour l'utiliser (Réglages › About)."
                     ));
                     self.updates.status = UpdateStatus::Installed(v);
                 }
@@ -616,7 +616,7 @@ impl AppState {
                     self.install_update(r);
                 } else {
                     self.info(format!(
-                        "Oxinote {} est disponible (Réglages › About).",
+                        "OxiNote {} est disponible (Réglages › About).",
                         r.version
                     ));
                     self.updates.status = UpdateStatus::Available(r);
@@ -670,7 +670,7 @@ mod tests {
     fn parses_the_github_release() {
         let json = r#"{
             "tag_name": "v0.2.0",
-            "html_url": "https://github.com/LeVibeux/Oxinote/releases/tag/v0.2.0",
+            "html_url": "https://github.com/LeVibeux/OxiNote/releases/tag/v0.2.0",
             "assets": [
                 {"name": "oxinote-v0.2.0-x86_64-unknown-linux-gnu.tar.gz", "browser_download_url": "https://x/linux"},
                 {"name": "oxinote-v0.2.0-x86_64-pc-windows-msvc.zip", "browser_download_url": "https://x/win"},
@@ -714,10 +714,10 @@ mod tests {
     fn detects_the_install_kind() {
         assert_eq!(
             install_kind(Path::new(
-                "/Applications/Oxinote.app/Contents/MacOS/oxinote-app"
+                "/Applications/OxiNote.app/Contents/MacOS/oxinote-app"
             )),
             InstallKind::MacBundle {
-                app: PathBuf::from("/Applications/Oxinote.app")
+                app: PathBuf::from("/Applications/OxiNote.app")
             }
         );
         assert_eq!(
@@ -799,18 +799,18 @@ mod tests {
     #[test]
     fn installs_a_macos_bundle() {
         let dir = tempfile::tempdir().expect("tmp");
-        let app = dir.path().join("Oxinote.app");
+        let app = dir.path().join("OxiNote.app");
         fs::create_dir_all(app.join("Contents/MacOS")).expect("mkdir");
         fs::write(app.join("Contents/MacOS/oxinote-app"), b"old").expect("write");
         fs::write(app.join("Contents/Info.plist"), b"old plist").expect("write");
         let top = "oxinote-v0.2.0-aarch64-apple-darwin";
         let archive = zip_of(&[
             (
-                &format!("{top}/Oxinote.app/Contents/MacOS/oxinote-app"),
+                &format!("{top}/OxiNote.app/Contents/MacOS/oxinote-app"),
                 b"new",
             ),
             (
-                &format!("{top}/Oxinote.app/Contents/Info.plist"),
+                &format!("{top}/OxiNote.app/Contents/Info.plist"),
                 b"new plist",
             ),
             (&format!("{top}/oxinote"), b"cli"),

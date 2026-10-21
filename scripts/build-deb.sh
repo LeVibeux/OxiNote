@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a Debian/Ubuntu package of Oxinote (app + CLI).
+# Build a Debian/Ubuntu package of OxiNote (app + CLI).
 #
 #   scripts/build-deb.sh BIN_DIR VERSION [OUT_DIR]
 #
@@ -34,8 +34,8 @@ done
 install -Dm644 "$root/README.md" "$pkg/usr/share/doc/oxinote/README.md"
 cat > "$pkg/usr/share/doc/oxinote/copyright" <<'EOF'
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: Oxinote
-Source: https://github.com/LeVibeux/Oxinote
+Upstream-Name: OxiNote
+Source: https://github.com/LeVibeux/OxiNote
 
 Files: *
 License: MIT or Apache-2.0
@@ -60,7 +60,7 @@ cat > "$pkg/DEBIAN/control" <<EOF
 Package: oxinote
 Version: $version
 Architecture: $arch
-Maintainer: Oxinote <https://github.com/LeVibeux/Oxinote>
+Maintainer: OxiNote <https://github.com/LeVibeux/OxiNote>
 Installed-Size: $installed_size
 Depends: ${shlibs:-libc6}, libgl1 | libegl1, libxkbcommon0
 Recommends: libxkbcommon-x11-0, libwayland-client0, libx11-6, libxcursor1, libxrandr2, libxi6, xdg-desktop-portal
@@ -70,9 +70,9 @@ Replaces: obsirust
 Provides: obsirust
 Section: editors
 Priority: optional
-Homepage: https://github.com/LeVibeux/Oxinote
+Homepage: https://github.com/LeVibeux/OxiNote
 Description: Obsidian-compatible Markdown knowledge base, written in Rust
- Oxinote opens existing Obsidian vaults: Live Preview, Source and Reading
+ OxiNote opens existing Obsidian vaults: Live Preview, Source and Reading
  modes, wikilinks and backlinks, graph view, typed properties and tags,
  search, PDF viewer and a local Git backup. The package also installs the
  oxinote command-line tool.

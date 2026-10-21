@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Oxinote
+Name=OxiNote
 Comment=Notes Markdown, compatible avec les vaults Obsidian
 Exec=oxinote-app %F
 Icon=oxinote

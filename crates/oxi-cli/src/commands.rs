@@ -622,7 +622,7 @@ mod tests {
     fn search_format() {
         let results = vec![
             SearchResult {
-                path: p("Projets/Oxinote.md"),
+                path: p("Projets/OxiNote.md"),
                 score: 3,
                 matches: vec![SearchMatch {
                     line: 6,
@@ -638,7 +638,7 @@ mod tests {
         ];
         assert_eq!(
             format_search(&results, false),
-            "Projets/Oxinote.md:7: Portage d'Obsidian en Rust.\nIdées.md\n"
+            "Projets/OxiNote.md:7: Portage d'Obsidian en Rust.\nIdées.md\n"
         );
         assert!(format_search(&results, true).contains("en \x1b[1mRust\x1b[0m."));
         let json = serde_json::to_value(search_json(&results)).unwrap();

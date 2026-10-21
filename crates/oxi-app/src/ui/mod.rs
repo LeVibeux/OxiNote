@@ -427,7 +427,7 @@ impl OxinoteApp {
                 ui.vertical_centered(|ui| {
                     ui.add_space(ui.available_height() * 0.12);
                     ui.label(RichText::new("◆").size(44.0).color(pal.accent));
-                    ui.label(RichText::new("Oxinote").size(30.0).color(pal.strong));
+                    ui.label(RichText::new("OxiNote").size(30.0).color(pal.strong));
                     ui.label(RichText::new("A Rust reimplementation of Obsidian").color(pal.muted));
                     ui.add_space(24.0);
                     ui.set_max_width(460.0);
@@ -912,8 +912,8 @@ impl OxinoteApp {
         // Poll the file watcher regularly.
         ctx.request_repaint_after(Duration::from_secs(1));
         let title = match state.active_tab() {
-            Some(t) => format!("{} - {} - Oxinote", t.title(), state.vault.name()),
-            None => format!("{} - Oxinote", state.vault.name()),
+            Some(t) => format!("{} - {} - OxiNote", t.title(), state.vault.name()),
+            None => format!("{} - OxiNote", state.vault.name()),
         };
         if self.title != title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));

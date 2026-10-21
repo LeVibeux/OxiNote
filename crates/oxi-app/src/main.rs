@@ -45,7 +45,7 @@ use settings::{LeftPane, RightPane, ThemeChoice};
 use ui::Startup;
 
 /// Name of the app (window title, folders of its settings).
-pub const APP_NAME: &str = "Oxinote";
+pub const APP_NAME: &str = "OxiNote";
 
 const USAGE: &str = "usage: oxinote-app [VAULT_PATH] [--demo]";
 

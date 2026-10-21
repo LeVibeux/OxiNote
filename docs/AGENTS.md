@@ -1,4 +1,4 @@
-# Guide pour les agents — Oxinote
+# Guide pour les agents — OxiNote
 
 À lire en entier avant de coder. Il évite de ré-explorer le dépôt.
 
@@ -28,7 +28,7 @@ Lis la rustdoc d'une API **avant** de l'utiliser (`grep -n "pub fn" crates/<crat
 - `settings.rs` : `Settings` (thème, sidebars `LeftPane`/`RightPane`, tailles de police…), persistés via eframe storage.
 
 ## Règles (obligatoires)
-1. Tu travailles **uniquement** dans le worktree qu'on t'indique (chemin absolu). Fais `cd` dedans avant toute commande. Ne touche jamais `/home/user/Oxinote` lui-même ni les autres worktrees.
+1. Tu travailles **uniquement** dans le worktree qu'on t'indique (chemin absolu). Fais `cd` dedans avant toute commande. Ne touche jamais `/home/user/OxiNote` lui-même ni les autres worktrees.
 2. Ne modifie que ta zone. Mets le nouveau code dans de **nouveaux modules**. Dans les fichiers partagés (`state.rs`, `ui/mod.rs`, `backend.rs`, `fake.rs`, `commands.rs`, `settings.rs`, `main.rs`), fais des ajouts **minimaux** (nouveaux variants, champs, méthodes, un appel), sans reformater ni réorganiser.
 3. Pas de `unsafe`, pas de `unwrap()`/`expect()` hors tests, pas de panique sur les erreurs d'I/O (affiche un toast avec `state.error(..)`).
 4. La logique doit vivre dans des fonctions pures ou dans `AppState`, avec des tests unitaires. L'UI egui reste fine.

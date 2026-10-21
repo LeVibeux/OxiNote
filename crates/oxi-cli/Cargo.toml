@@ -1,6 +1,6 @@
 [package]
 name = "oxi-cli"
-description = "Oxinote command-line interface"
+description = "OxiNote command-line interface"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

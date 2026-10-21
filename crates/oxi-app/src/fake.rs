@@ -663,8 +663,8 @@ pub fn demo_vault() -> MemVault {
                 include_str!("../../../examples/sample-vault/Journal/2026-10-20.md"),
             ),
             (
-                "Projets/Oxinote.md",
-                include_str!("../../../examples/sample-vault/Projets/Oxinote.md"),
+                "Projets/OxiNote.md",
+                include_str!("../../../examples/sample-vault/Projets/OxiNote.md"),
             ),
             (
                 "Projets/Rust notes.md",

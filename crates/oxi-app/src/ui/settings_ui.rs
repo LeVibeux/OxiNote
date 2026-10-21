@@ -901,7 +901,7 @@ fn templates_page(ui: &mut egui::Ui, state: &mut AppState, win: &mut SettingsWin
 fn about_page(ui: &mut egui::Ui, state: &mut AppState) {
     let pal = Palette::of(ui.ctx());
     ui.label(
-        RichText::new("Oxinote")
+        RichText::new("OxiNote")
             .size(20.0)
             .strong()
             .color(pal.strong),
@@ -951,11 +951,11 @@ fn updates_section(ui: &mut egui::Ui, state: &mut AppState) {
     let text = match &status {
         UpdateStatus::Idle => String::new(),
         UpdateStatus::Checking => "Recherche en cours…".to_string(),
-        UpdateStatus::UpToDate => "Oxinote est à jour.".to_string(),
+        UpdateStatus::UpToDate => "OxiNote est à jour.".to_string(),
         UpdateStatus::Available(r) => format!("La version {} est disponible.", r.version),
         UpdateStatus::Installing(v) => format!("Installation de {v}…"),
         UpdateStatus::Installed(v) => {
-            format!("{v} est installée : redémarrez Oxinote pour l'utiliser.")
+            format!("{v} est installée : redémarrez OxiNote pour l'utiliser.")
         }
         UpdateStatus::Failed(e) => format!("Échec : {e}"),
     };

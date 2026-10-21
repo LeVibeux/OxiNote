@@ -22,7 +22,7 @@ related: "[[Accueil]]"
 ## Embeds
 
 ![[diagramme.png]]
-![[Projets/Oxinote#Architecture]]
+![[Projets/OxiNote#Architecture]]
 ![[Idées#^graphe]]
 
 Le code n'est pas parsé : `#pas-un-tag` et `[[pas un lien]]`.

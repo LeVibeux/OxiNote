@@ -76,7 +76,7 @@ fn idees() {
             ("Canvas", LinkKind::Wiki, false),
             ("Accueil", LinkKind::Wiki, false),
             ("diagramme.png", LinkKind::Wiki, true),
-            ("Projets/Oxinote", LinkKind::Wiki, true),
+            ("Projets/OxiNote", LinkKind::Wiki, true),
             ("Idées", LinkKind::Wiki, true),
         ]
     );
@@ -126,7 +126,7 @@ fn accueil() {
     assert_eq!(
         links,
         [
-            ("Projets/Oxinote", LinkKind::Wiki),
+            ("Projets/OxiNote", LinkKind::Wiki),
             ("Idées", LinkKind::Wiki),
             ("2026-10-20", LinkKind::Wiki),
             ("Note fantôme", LinkKind::Wiki),
@@ -153,7 +153,7 @@ fn other_notes() {
         p.links.last().unwrap().subpath,
         Some(Subpath::Block("borrow".into()))
     );
-    let p = parse(&read("Projets/Oxinote.md"));
+    let p = parse(&read("Projets/OxiNote.md"));
     let tags: Vec<&str> = p.tags.iter().map(|t| t.name.as_str()).collect();
     assert_eq!(tags, ["projet/oxinote", "rust", "projet/oxinote"]);
     assert_eq!(p.frontmatter.unwrap()["date"], "2026-10-20");

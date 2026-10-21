@@ -8,9 +8,9 @@ use std::path::{Path, PathBuf};
 
 use crate::backend::VaultBackend;
 
-/// The app name before Oxinote.
+/// The app name before OxiNote.
 pub const OLD_NAME: &str = "ObsiRust";
-/// Prefix of the app's own hotkey ids before Oxinote.
+/// Prefix of the app's own hotkey ids before OxiNote.
 pub const OLD_HOTKEY_PREFIX: &str = "obsirust:";
 /// Per-vault config files (in `.obsidian/`): (new name, old name).
 pub const CONFIG_FILES: [(&str, &str); 2] = [

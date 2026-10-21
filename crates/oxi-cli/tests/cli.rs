@@ -176,7 +176,7 @@ fn stats_counts_sample_vault() {
     assert_eq!(v["notes"], 7);
     assert_eq!(v["attachments"], 1);
     // Accueil 5, Idées 6 (frontmatter link + 2 links + 3 embeds), Journal 2,
-    // Oxinote 3, Rust notes 2. Links in comments and code are ignored.
+    // OxiNote 3, Rust notes 2. Links in comments and code are ignored.
     assert_eq!(v["links"], 18);
     assert_eq!(v["embeds"], 3);
     assert_eq!(v["unresolved_links"], 2);
@@ -193,14 +193,14 @@ fn stats_counts_sample_vault() {
 #[test]
 fn search_with_tag_and_phrase() {
     let out = run_ok(&["search", &vault_arg(), "tag:#projet \"rust\""]);
-    assert!(out.contains("Projets/Oxinote.md"), "{out}");
+    assert!(out.contains("Projets/OxiNote.md"), "{out}");
     assert!(out.contains("Idées.md"), "{out}");
     assert!(!out.contains("Accueil.md"), "{out}");
     assert!(!out.contains("Orpheline.md"), "{out}");
     // Matching lines are printed as path:line: text.
     assert!(
         out.lines()
-            .any(|l| l.starts_with("Projets/Oxinote.md:7: ") && l.contains("Rust")),
+            .any(|l| l.starts_with("Projets/OxiNote.md:7: ") && l.contains("Rust")),
         "{out}"
     );
     // No ANSI codes when stdout is not a terminal.
@@ -208,7 +208,7 @@ fn search_with_tag_and_phrase() {
     let v: serde_json::Value = serde_json::from_str(&run_ok(&[
         "search",
         &vault_arg(),
-        "Oxinote",
+        "OxiNote",
         "--json",
         "--limit",
         "2",
@@ -229,14 +229,14 @@ fn backlinks_by_name_and_path() {
         "{out}"
     );
     assert!(
-        out.contains("Projets/Oxinote.md:7: [[Rust notes]]"),
+        out.contains("Projets/OxiNote.md:7: [[Rust notes]]"),
         "{out}"
     );
     let same = run_ok(&["backlinks", &vault_arg(), "Projets/Rust notes.md"]);
     assert_eq!(out, same);
     let out = run_ok(&["backlinks", &vault_arg(), "Idées"]);
     assert!(out.contains("Accueil.md:"), "{out}");
-    assert!(out.contains("Projets/Oxinote.md:"), "{out}");
+    assert!(out.contains("Projets/OxiNote.md:"), "{out}");
     // Links in comments do not count.
     let err = run_err(&["backlinks", &vault_arg(), "Lien caché"]);
     assert!(err.contains("note not found"), "{err}");
@@ -246,7 +246,7 @@ fn backlinks_by_name_and_path() {
 fn outgoing_links_with_resolution() {
     let out = run_ok(&["links", &vault_arg(), "Accueil"]);
     assert!(
-        out.contains("✓ [[Projets/Oxinote|le projet]] → Projets/Oxinote.md"),
+        out.contains("✓ [[Projets/OxiNote|le projet]] → Projets/OxiNote.md"),
         "{out}"
     );
     assert!(out.contains("✓ [[Idées]] → Idées.md"), "{out}");
@@ -412,7 +412,7 @@ fn export_static_site() {
         "style.css",
         "Accueil.html",
         "Idées.html",
-        "Projets/Oxinote.html",
+        "Projets/OxiNote.html",
         "Projets/Rust notes.html",
         "Journal/2026-10-20.html",
         "attachments/diagramme.png",
@@ -428,7 +428,7 @@ fn export_static_site() {
     assert!(accueil.contains("<title>Accueil - sample-vault</title>"));
     assert!(accueil.contains("href=\"style.css\""));
     assert!(
-        accueil.contains("href=\"Projets/Oxinote.html\""),
+        accueil.contains("href=\"Projets/OxiNote.html\""),
         "wikilink → relative .html"
     );
     assert!(accueil.contains("is-unresolved"), "unresolved link styled");
@@ -436,7 +436,7 @@ fn export_static_site() {
     assert!(accueil.contains("<h2>Backlinks</h2>"));
     assert!(accueil.contains("Id%C3%A9es.html"), "backlink from Idées");
 
-    let oxinote = fs::read_to_string(out.join("Projets/Oxinote.html")).unwrap();
+    let oxinote = fs::read_to_string(out.join("Projets/OxiNote.html")).unwrap();
     assert!(oxinote.contains("href=\"../style.css\""));
     assert!(
         oxinote.contains("href=\"../Projets/Rust%20notes.html\""),
@@ -456,7 +456,7 @@ fn export_static_site() {
         "{idees}"
     );
     assert!(
-        !idees.contains("Mentionne Oxinote sans lien"),
+        !idees.contains("Mentionne OxiNote sans lien"),
         "only the section"
     );
     // Embedded block of the same note.

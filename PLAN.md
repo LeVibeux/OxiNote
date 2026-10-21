@@ -1,4 +1,4 @@
-# Oxinote — Plan de portage d'Obsidian en Rust
+# OxiNote — Plan de portage d'Obsidian en Rust
 
 Obsidian est une application propriétaire (Electron + TypeScript, code source fermé).
 « Porter » Obsidian signifie donc **réimplémenter** ses fonctionnalités en Rust,

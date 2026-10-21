@@ -948,22 +948,22 @@ mod tests {
 
     #[test]
     fn linking_a_mention() {
-        let src = "Voir rust ici.\nEt Oxinote.";
+        let src = "Voir rust ici.\nEt OxiNote.";
         let parsed = naive_parse(src);
         let m = find_mentions(src, &parsed, &["Rust".into()]);
         assert_eq!(m.len(), 1);
         assert_eq!(
             link_mention(src, &m[0], "Rust").unwrap(),
-            "Voir [[rust]] ici.\nEt Oxinote."
+            "Voir [[rust]] ici.\nEt OxiNote."
         );
         assert_eq!(
             link_mention(src, &m[0], "Projets/Rust").unwrap(),
-            "Voir [[Projets/Rust|rust]] ici.\nEt Oxinote."
+            "Voir [[Projets/Rust|rust]] ici.\nEt OxiNote."
         );
         let alias = find_mentions(src, &parsed, &["ici".into()]);
         assert_eq!(
             link_mention(src, &alias[0], "Accueil").unwrap(),
-            "Voir rust [[Accueil|ici]].\nEt Oxinote."
+            "Voir rust [[Accueil|ici]].\nEt OxiNote."
         );
         // Stale mention is refused.
         assert!(link_mention("changed", &m[0], "Rust").is_none());

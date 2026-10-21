@@ -108,9 +108,9 @@ fn image_embeds() {
 
 #[test]
 fn note_embed_placeholder() {
-    let h = render("![[Projets/Oxinote#Architecture]]\n\n![[doc.pdf]]");
+    let h = render("![[Projets/OxiNote#Architecture]]\n\n![[doc.pdf]]");
     assert!(
-        h.contains(r#"<div class="internal-embed" data-src="Projets/Oxinote#Architecture"></div>"#),
+        h.contains(r#"<div class="internal-embed" data-src="Projets/OxiNote#Architecture"></div>"#),
         "{h}"
     );
     assert!(

@@ -137,7 +137,7 @@ fn prop_set_and_rm() {
     );
     assert_eq!(
         read(&vault, "Orpheline.md"),
-        "---\ncode: \"2026-01-01\"\ntags:\n  - a\n  - b\n---\nUne note sans aucun lien, mais qui parle de Rust et de Oxinote.\n"
+        "---\ncode: \"2026-01-01\"\ntags:\n  - a\n  - b\n---\nUne note sans aucun lien, mais qui parle de Rust et de OxiNote.\n"
     );
     let types: serde_json::Value =
         serde_json::from_str(&read(&vault, ".obsidian/types.json")).unwrap();
@@ -185,7 +185,7 @@ fn tag_rename_add_rm() {
         dry.contains("Would rename #projet → #work in 2 note(s):"),
         "{dry}"
     );
-    assert!(dry.contains("Projets/Oxinote.md"));
+    assert!(dry.contains("Projets/OxiNote.md"));
     assert_eq!(read(&vault, "Idées.md"), before, "dry run writes nothing");
 
     let out = run_ok(&["tag", "rename", v, "projet", "work"]);
@@ -194,7 +194,7 @@ fn tag_rename_add_rm() {
         "{out}"
     );
     assert!(read(&vault, "Idées.md").contains("  - work/oxinote\n"));
-    let obsi = read(&vault, "Projets/Oxinote.md");
+    let obsi = read(&vault, "Projets/OxiNote.md");
     assert!(obsi.starts_with("---\ntags: work/oxinote\n"), "{obsi}");
     assert!(obsi.contains("#rust #work/oxinote"), "{obsi}");
     // Code spans untouched.

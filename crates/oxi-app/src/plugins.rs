@@ -79,7 +79,7 @@ impl CorePlugin {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct CorePlugins {
-    /// All known entries of the file (also plugins Oxinote ignores).
+    /// All known entries of the file (also plugins OxiNote ignores).
     map: Map<String, Value>,
 }
 

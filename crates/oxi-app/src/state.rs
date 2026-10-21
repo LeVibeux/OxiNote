@@ -1676,7 +1676,7 @@ mod tests {
         assert!(s.note_info().backlink_count > 0);
         s.rename_file(&p("Projets/Rust notes.md"), "Rust");
         assert_eq!(s.active_note(), Some(&p("Projets/Rust.md")));
-        let obsi = disk(&s, "Projets/Oxinote.md");
+        let obsi = disk(&s, "Projets/OxiNote.md");
         assert!(obsi.contains("[[Rust]]"), "{obsi}");
         assert!(!s.files.contains(&p("Projets/Rust notes.md")));
         s.search_query = "propriétaire".into();
@@ -1689,12 +1689,12 @@ mod tests {
     #[test]
     fn real_vault_folder_ops_and_notes() {
         let (mut s, dir) = real_state("folders");
-        s.open(&p("Projets/Oxinote.md"), OpenIn::CurrentTab);
+        s.open(&p("Projets/OxiNote.md"), OpenIn::CurrentTab);
         s.rename_folder("Projets", "Projects");
-        assert_eq!(s.active_note(), Some(&p("Projects/Oxinote.md")));
+        assert_eq!(s.active_note(), Some(&p("Projects/OxiNote.md")));
         assert!(!s.folders.iter().any(|f| f == "Projets"));
         let accueil = disk(&s, "Accueil.md");
-        assert!(accueil.contains("Projects/Oxinote"), "{accueil}");
+        assert!(accueil.contains("Projects/OxiNote"), "{accueil}");
         // New notes go to the configured folder (Inbox).
         s.execute(Command::NewNote);
         let created = s.active_note().cloned().unwrap();

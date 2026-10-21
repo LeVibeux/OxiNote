@@ -5,7 +5,7 @@
 //!  "other-id": []}
 //! ```
 //! Only commands whose binding differs from the default are stored; an
-//! empty array removes a default hotkey. Ids unknown to Oxinote are kept.
+//! empty array removes a default hotkey. Ids unknown to OxiNote are kept.
 
 use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 use serde_json::{Map, Value, json};
@@ -167,7 +167,7 @@ pub fn apply(json: &str, registry: &mut CommandRegistry) {
 }
 
 /// Serialize the non-default bindings of `registry`, keeping entries of
-/// `existing` that Oxinote does not know.
+/// `existing` that OxiNote does not know.
 pub fn to_json(registry: &CommandRegistry, existing: &str) -> String {
     let defaults = CommandRegistry::default();
     let mut map: Map<String, Value> = match serde_json::from_str::<Value>(existing) {

@@ -78,7 +78,7 @@ fn lists_all_files() {
             "Idées.md",
             "Journal/2026-10-20.md",
             "Orpheline.md",
-            "Projets/Oxinote.md",
+            "Projets/OxiNote.md",
             "Projets/Rust notes.md",
             "Templates/Daily.md",
             "attachments/diagramme.png",
@@ -112,10 +112,10 @@ fn raw_text_search_on_sample() {
         vec!["Projets/Rust notes.md"]
     );
     assert!(paths("section:(ownership références)").is_empty());
-    assert_eq!(paths("path:Projets crates"), vec!["Projets/Oxinote.md"]);
+    assert_eq!(paths("path:Projets crates"), vec!["Projets/OxiNote.md"]);
     assert_eq!(
         paths("line:(mentionne oxinote)"),
-        vec!["Projets/Oxinote.md"]
+        vec!["Projets/OxiNote.md"]
     );
     assert_eq!(
         paths("\"note fantôme\" OR orpheline"),
@@ -141,7 +141,7 @@ fn backlinks_of_accueil() {
     // Idées: frontmatter `related: "[[Accueil]]"` and the callout link.
     assert_eq!(
         sources(&cache, "Accueil.md"),
-        vec!["Idées.md", "Projets/Oxinote.md"]
+        vec!["Idées.md", "Projets/OxiNote.md"]
     );
     let from_ideas = cache
         .backlinks(&p("Accueil.md"))
@@ -165,25 +165,25 @@ fn resolution_on_sample() {
     assert_eq!(
         accueil,
         vec![
-            Some("Projets/Oxinote.md".into()),
+            Some("Projets/OxiNote.md".into()),
             Some("Idées.md".into()),
             Some("Journal/2026-10-20.md".into()),
             None,
             Some("Projets/Rust notes.md".into()),
         ]
     );
-    // [[Oxinote]] from the same folder, self block link.
+    // [[OxiNote]] from the same folder, self block link.
     assert_eq!(
         targets("Projets/Rust notes.md"),
         vec![
-            Some("Projets/Oxinote.md".into()),
+            Some("Projets/OxiNote.md".into()),
             Some("Projets/Rust notes.md".into())
         ]
     );
     assert_eq!(
         targets("Journal/2026-10-20.md"),
         vec![
-            Some("Projets/Oxinote.md".into()),
+            Some("Projets/OxiNote.md".into()),
             Some("Projets/Rust notes.md".into())
         ]
     );
@@ -192,7 +192,7 @@ fn resolution_on_sample() {
         vec!["Idées.md"]
     );
     assert_eq!(
-        sources(&cache, "Projets/Oxinote.md"),
+        sources(&cache, "Projets/OxiNote.md"),
         vec![
             "Accueil.md",
             "Idées.md",
@@ -202,7 +202,7 @@ fn resolution_on_sample() {
     );
     assert_eq!(
         sources(&cache, "Idées.md"),
-        vec!["Accueil.md", "Projets/Oxinote.md"]
+        vec!["Accueil.md", "Projets/OxiNote.md"]
     );
 }
 
@@ -241,12 +241,12 @@ fn tags_on_sample() {
     assert_eq!(tags["rust"], 2);
     assert_eq!(
         strs(&cache.files_with_tag("#projet")),
-        vec!["Idées.md", "Projets/Oxinote.md"]
+        vec!["Idées.md", "Projets/OxiNote.md"]
     );
     assert_eq!(strs(&cache.files_with_tag("META")), vec!["Accueil.md"]);
     assert_eq!(
         strs(&cache.files_with_tag("rust")),
-        vec!["Projets/Oxinote.md", "Projets/Rust notes.md"]
+        vec!["Projets/OxiNote.md", "Projets/Rust notes.md"]
     );
 }
 
@@ -259,7 +259,7 @@ fn orphans_mentions_and_graph_on_sample() {
         vec!["Orpheline.md", "Templates/Daily.md"]
     );
     assert_eq!(
-        strs(&cache.unlinked_mentions(&vault, &p("Projets/Oxinote.md"))),
+        strs(&cache.unlinked_mentions(&vault, &p("Projets/OxiNote.md"))),
         vec!["Accueil.md", "Orpheline.md"]
     );
     // Alias "Home" / "Index" of Accueil are not mentioned anywhere.
@@ -273,7 +273,7 @@ fn orphans_mentions_and_graph_on_sample() {
             "Accueil.md",
             "Idées.md",
             "Journal/2026-10-20.md",
-            "Projets/Oxinote.md",
+            "Projets/OxiNote.md",
             "Projets/Rust notes.md"
         ]
     );
@@ -314,7 +314,7 @@ fn tag_search_on_sample() {
         .collect();
     r.sort();
     // Idées matches through its ```rust code fence.
-    assert_eq!(r, vec!["Idées.md", "Projets/Oxinote.md"]);
+    assert_eq!(r, vec!["Idées.md", "Projets/OxiNote.md"]);
     let r = idx.search("[status:brouillon]", &cache).unwrap();
     assert_eq!(r.len(), 1);
     assert_eq!(r[0].path.as_str(), "Idées.md");
@@ -339,18 +339,18 @@ fn rename_note_updates_links() {
     .unwrap();
     assert_eq!(
         strs(&changed),
-        vec!["Accueil.md", "Archive/Brainstorm.md", "Projets/Oxinote.md"]
+        vec!["Accueil.md", "Archive/Brainstorm.md", "Projets/OxiNote.md"]
     );
     assert!(read(&vault, "Accueil.md").contains("et [[Brainstorm]]."));
-    assert!(read(&vault, "Projets/Oxinote.md").contains("[[Brainstorm#Fonctionnalités]]"));
+    assert!(read(&vault, "Projets/OxiNote.md").contains("[[Brainstorm#Fonctionnalités]]"));
     let moved = read(&vault, "Archive/Brainstorm.md");
     assert!(moved.contains("![[Brainstorm#^graphe]]"));
     // Untouched links in the moved note.
-    assert!(moved.contains("![[Projets/Oxinote#Architecture]]"));
+    assert!(moved.contains("![[Projets/OxiNote#Architecture]]"));
     assert!(moved.contains("[[Accueil#Accueil|liens]]"));
     assert_eq!(
         sources(&cache, "Archive/Brainstorm.md"),
-        vec!["Accueil.md", "Projets/Oxinote.md"]
+        vec!["Accueil.md", "Projets/OxiNote.md"]
     );
     let u = cache.unresolved();
     assert_eq!(u.len(), 2);
@@ -373,13 +373,13 @@ fn rename_with_spaces_updates_markdown_and_wiki_links() {
         vec![
             "Accueil.md",
             "Journal/2026-10-20.md",
-            "Projets/Oxinote.md",
+            "Projets/OxiNote.md",
             "Projets/Rust book.md"
         ]
     );
     assert!(read(&vault, "Accueil.md").contains("[Rust](Projets/Rust%20book.md#Ownership)"));
     assert!(read(&vault, "Journal/2026-10-20.md").contains("[[Rust book#Borrowing|borrowing]]"));
-    assert!(read(&vault, "Projets/Oxinote.md").contains("Voir [[Rust book]] et"));
+    assert!(read(&vault, "Projets/OxiNote.md").contains("Voir [[Rust book]] et"));
     assert!(read(&vault, "Projets/Rust book.md").contains("[[Rust book#^borrow]]"));
     assert_eq!(cache.unresolved().len(), 2);
 }
@@ -391,21 +391,21 @@ fn move_note_keeps_style() {
     let changed = rename_with_links(
         &vault,
         &mut cache,
-        &p("Projets/Oxinote.md"),
-        &p("Archive/Oxinote.md"),
+        &p("Projets/OxiNote.md"),
+        &p("Archive/OxiNote.md"),
     )
     .unwrap();
-    // [[Oxinote]] in "Rust notes" is a unique basename: unchanged.
+    // [[OxiNote]] in "Rust notes" is a unique basename: unchanged.
     assert_eq!(
         strs(&changed),
         vec!["Accueil.md", "Idées.md", "Journal/2026-10-20.md"]
     );
-    assert!(read(&vault, "Accueil.md").contains("[[Archive/Oxinote|le projet]]"));
-    assert!(read(&vault, "Idées.md").contains("![[Archive/Oxinote#Architecture]]"));
-    assert!(read(&vault, "Journal/2026-10-20.md").contains("[[Archive/Oxinote]]"));
-    assert!(read(&vault, "Projets/Rust notes.md").contains("[[Oxinote]]"));
+    assert!(read(&vault, "Accueil.md").contains("[[Archive/OxiNote|le projet]]"));
+    assert!(read(&vault, "Idées.md").contains("![[Archive/OxiNote#Architecture]]"));
+    assert!(read(&vault, "Journal/2026-10-20.md").contains("[[Archive/OxiNote]]"));
+    assert!(read(&vault, "Projets/Rust notes.md").contains("[[OxiNote]]"));
     assert_eq!(
-        sources(&cache, "Archive/Oxinote.md"),
+        sources(&cache, "Archive/OxiNote.md"),
         vec![
             "Accueil.md",
             "Idées.md",

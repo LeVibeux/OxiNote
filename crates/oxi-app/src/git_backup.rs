@@ -121,7 +121,7 @@ impl std::fmt::Display for GitError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GitError::Missing => {
-                write!(f, "Git est introuvable : installe-le et relance Oxinote.")
+                write!(f, "Git est introuvable : installe-le et relance OxiNote.")
             }
             GitError::Locked => write!(f, "Le dépôt est occupé (index.lock)."),
             GitError::Failed(m) => write!(f, "{m}"),
@@ -305,7 +305,7 @@ fn identity_cfg(vault: &Path) -> Vec<String> {
         Vec::new()
     } else {
         vec![
-            "user.name=Oxinote".into(),
+            "user.name=OxiNote".into(),
             "user.email=oxinote@localhost".into(),
         ]
     }
@@ -386,7 +386,7 @@ pub const GITIGNORE: &str = ".gitignore";
 
 /// Default `.gitignore` written by "Initialiser le dépôt Git du vault".
 pub const DEFAULT_GITIGNORE: &str = "\
-# Fichiers locaux d'Oxinote / Obsidian : état de l'espace de travail
+# Fichiers locaux d'OxiNote / Obsidian : état de l'espace de travail
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/workspace-oxinote.json
@@ -1740,7 +1740,7 @@ mod tests {
         // The user's config is never modified by the fallback.
         assert_ne!(
             identity_cfg(dir.path()),
-            vec!["user.name=Oxinote", "user.email=oxinote@localhost"]
+            vec!["user.name=OxiNote", "user.email=oxinote@localhost"]
         );
     }
 

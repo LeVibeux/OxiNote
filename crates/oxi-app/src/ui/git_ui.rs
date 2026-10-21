@@ -74,7 +74,7 @@ pub fn settings_page(ui: &mut egui::Ui, state: &mut AppState) {
             ui.label(
                 RichText::new(
                     "Git est introuvable sur cet ordinateur. Installe-le (https://git-scm.com) \
-                     puis relance Oxinote : la sauvegarde Git est désactivée.",
+                     puis relance OxiNote : la sauvegarde Git est désactivée.",
                 )
                 .color(warning_color()),
             );
@@ -164,7 +164,7 @@ pub fn settings_page(ui: &mut egui::Ui, state: &mut AppState) {
     changed |= toggle_row(
         ui,
         "Sauvegarder à la fermeture",
-        "Crée un dernier commit en quittant Oxinote.",
+        "Crée un dernier commit en quittant OxiNote.",
         &mut state.git.settings.backup_on_exit,
     );
     changed |= text_row(

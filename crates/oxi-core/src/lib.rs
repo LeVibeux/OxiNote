@@ -1,4 +1,4 @@
-//! Shared types and traits for Oxinote.
+//! Shared types and traits for OxiNote.
 //!
 //! This crate is the contract between all other crates: it holds the data model
 //! produced by `oxi-markdown`, consumed by `oxi-index`, and displayed by the

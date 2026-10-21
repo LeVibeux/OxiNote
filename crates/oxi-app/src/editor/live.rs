@@ -495,7 +495,7 @@ mod tests {
 
     #[test]
     fn links_and_tags() {
-        let t = "Voir [[Projets/Oxinote|le projet]], [[Idées#Fonc]] et [doc](https://x.y) #tag/é";
+        let t = "Voir [[Projets/OxiNote|le projet]], [[Idées#Fonc]] et [doc](https://x.y) #tag/é";
         let d = decorate(t);
         assert_eq!(shown(t, &d), "Voir le projet, Idées#Fonc et doc·· #tag/é");
         assert_eq!(d.links.len(), 4);
@@ -503,7 +503,7 @@ mod tests {
         assert_eq!(
             d.link_at(at).map(|l| &l.target),
             Some(&LinkTarget::Wiki {
-                target: "Projets/Oxinote".into(),
+                target: "Projets/OxiNote".into(),
                 subpath: None
             })
         );

@@ -78,7 +78,7 @@ fn lines_of(res: &[SearchResult], path: &str) -> Vec<(usize, String, Vec<String>
 #[test]
 fn tag_query_reports_inline_and_frontmatter_lines() {
     let res = run("tag:#projet");
-    let obsi = lines_of(&res, "Projets/Oxinote.md");
+    let obsi = lines_of(&res, "Projets/OxiNote.md");
     // Frontmatter `tags:` line (0-based line 1) and the inline tag on line 10.
     assert!(
         obsi.iter()
@@ -109,14 +109,14 @@ fn property_query_reports_property_line() {
 #[test]
 fn scoped_tag_inside_line_operator() {
     let res = run("line:(tag:#rust)");
-    let obsi = lines_of(&res, "Projets/Oxinote.md");
+    let obsi = lines_of(&res, "Projets/OxiNote.md");
     assert!(obsi.iter().any(|(l, _, t)| *l == 10 && t == &["#rust"]));
 }
 
 #[test]
 fn path_and_file_operators_match_without_lines() {
-    let res = run("file:Oxinote");
-    assert!(res.iter().any(|r| r.path.as_str() == "Projets/Oxinote.md"));
+    let res = run("file:OxiNote");
+    assert!(res.iter().any(|r| r.path.as_str() == "Projets/OxiNote.md"));
     let res = run("path:Projets");
     assert_eq!(res.len(), 2);
 }

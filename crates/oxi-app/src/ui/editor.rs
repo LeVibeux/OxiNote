@@ -230,7 +230,7 @@ pub fn conflict_banner(ui: &mut egui::Ui, path: &NotePath, actions: &mut Vec<Act
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                ui.label(RichText::new("⚠ This file was modified outside Oxinote.").color(color));
+                ui.label(RichText::new("⚠ This file was modified outside OxiNote.").color(color));
                 if ui.button("Reload from disk").clicked() {
                     actions.push(Action::Resolve(path.clone(), false));
                 }
