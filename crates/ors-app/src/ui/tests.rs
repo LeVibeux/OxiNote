@@ -758,3 +758,48 @@ fn the_column_keeps_a_right_margin_when_the_navigator_is_active() {
     );
     assert!(800.0 - on >= editor::NAV_RESERVE);
 }
+
+fn wheel(dy: f32) -> Vec<Event> {
+    vec![
+        Event::PointerMoved(pos2(700.0, 400.0)),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, dy),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Trackpad,
+            modifiers: Modifiers::NONE,
+        },
+    ]
+}
+
+#[test]
+fn long_note_scrolls_in_reading_and_live_preview() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    let path = open_empty(&mut app, &ctx);
+    let text: String = (0..150)
+        .map(|i| format!("## Part {i}\n\nSome text with a [[link]].\n\n- [ ] task {i}\n\n"))
+        .collect();
+    state(&mut app).buffers.get_mut(&path).expect("buffer").text = text;
+    state(&mut app).buffer_edited(&path);
+    for mode in [DisplayMode::Reading, DisplayMode::LivePreview] {
+        state(&mut app).set_display_mode(mode);
+        frames(&mut app, &ctx, 3);
+        for _ in 0..80 {
+            frame(&mut app, &ctx, wheel(-300.0));
+        }
+    }
+    // Reading view: far-off blocks are skipped, the heading tracking still
+    // follows the scroll.
+    state(&mut app).set_display_mode(DisplayMode::Reading);
+    frames(&mut app, &ctx, 3);
+    for _ in 0..40 {
+        frame(&mut app, &ctx, wheel(-300.0));
+    }
+    let line = state(&mut app)
+        .views
+        .current_line
+        .as_ref()
+        .map_or(0, |(_, l)| *l);
+    assert!(line > 100, "current line {line}");
+}
