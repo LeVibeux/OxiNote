@@ -152,6 +152,7 @@ fn all_panes_render() {
             RightPane::Backlinks,
             RightPane::Outgoing,
             RightPane::Outline,
+            RightPane::LocalGraph,
         ] {
             let s = state(&mut app);
             s.settings.left_pane = left;
@@ -162,6 +163,7 @@ fn all_panes_render() {
     }
     state(&mut app).execute(Command::OpenLocalGraph);
     frames(&mut app, &ctx, 2);
+    assert!(state(&mut app).views.local_pane.is_some());
     state(&mut app).execute(Command::SwitchVault);
     frames(&mut app, &ctx, 1);
     assert!(app.state.is_none());

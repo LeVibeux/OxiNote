@@ -27,6 +27,7 @@ pub enum RightPane {
     Backlinks,
     Outgoing,
     Outline,
+    LocalGraph,
 }
 
 /// How notes open for editing (Obsidian's "Default editing mode").

@@ -7,9 +7,11 @@ mod editor;
 mod graph;
 mod modals;
 mod panes;
+mod reading_view;
 #[cfg(test)]
 mod tests;
 pub mod theme;
+mod view_panes;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -50,10 +52,15 @@ pub enum Action {
     Resolve(NotePath, bool),
     Edited(NotePath),
     ShowBacklinks,
+    /// Requests of the graph / search / backlinks / outline / reading views.
+    View(crate::views::ViewAction),
+    Error(String),
 }
 
 fn apply(state: &mut AppState, action: Action) {
     match action {
+        Action::View(a) => crate::views::apply(state, a),
+        Action::Error(e) => state.error(e),
         Action::Open(p, how) => state.open(&p, how),
         Action::OpenLine(p, line, how) => state.open_at_line(&p, line, how),
         Action::Follow {
@@ -86,7 +93,7 @@ fn apply(state: &mut AppState, action: Action) {
 pub struct UiCaches {
     images: HashMap<NotePath, Option<egui::load::Bytes>>,
     highlight: HashMap<TabId, (u64, LayoutJob)>,
-    reading: HashMap<NotePath, editor::Rendered>,
+    reading: HashMap<NotePath, reading_view::Rendered>,
     decor: HashMap<TabId, (u64, Rc<crate::editor::live::Decor>)>,
     completion: Option<edit::CompletionUi>,
     find: Option<edit::FindUi>,
@@ -120,6 +127,8 @@ pub struct Startup {
     pub open: Vec<String>,
     pub reading: bool,
     pub graph: bool,
+    /// Open the graph settings panel (screenshots).
+    pub graph_panel: bool,
     pub palette: bool,
     pub switcher: Option<String>,
     pub search: Option<String>,
@@ -267,6 +276,15 @@ impl ObsiApp {
         if let Some(q) = &s.search {
             state.search_query = q.clone();
             state.settings.left_pane = LeftPane::Search;
+        }
+        if s.graph_panel {
+            state.views.graph.override_unsaved(|g| {
+                g.close = false;
+                g.collapse_filter = false;
+                g.collapse_color_groups = false;
+                g.collapse_display = false;
+                g.collapse_forces = false;
+            });
         }
         if s.graph {
             state.open_graph(false);
@@ -580,6 +598,11 @@ fn central(
             {
                 editor::conflict_banner(ui, &path, actions);
             }
+            let scroll_to = if mode == ViewMode::Reading {
+                crate::views::take_pending_line(state)
+            } else {
+                None
+            };
             if mode == ViewMode::Source && path.is_markdown() {
                 edit::find_bar(ui, state, caches, tab_id, &path, actions);
             }
@@ -590,7 +613,7 @@ fn central(
                     if !path.is_markdown() {
                         editor::file_view(ui, state, caches, &path);
                     } else if mode == ViewMode::Reading {
-                        editor::reading_view(ui, state, caches, &path, actions);
+                        reading_view::reading_view(ui, state, caches, &path, scroll_to, actions);
                     } else {
                         edit::edit_view(ui, state, caches, tab_id, &path, actions);
                     }

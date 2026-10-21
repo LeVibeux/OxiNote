@@ -15,12 +15,14 @@ mod backend;
 mod commands;
 mod editor;
 mod fake;
+mod graph_model;
 mod highlight;
 mod reading;
 mod settings;
 mod state;
 mod ui;
 mod util;
+mod views;
 
 use std::path::PathBuf;
 
@@ -53,6 +55,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
             "--fresh" => s.fresh = true,
             "--reading" => s.reading = true,
             "--graph" => s.graph = true,
+            "--graph-panel" => s.graph_panel = true,
             "--palette" => s.palette = true,
             "--screenshot" => s.screenshot = Some(PathBuf::from(value(&mut it, &a)?)),
             "--frames" => {
@@ -81,6 +84,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
                 s.right = Some(match value(&mut it, &a)?.as_str() {
                     "outgoing" => RightPane::Outgoing,
                     "outline" => RightPane::Outline,
+                    "graph" | "localgraph" => RightPane::LocalGraph,
                     _ => RightPane::Backlinks,
                 });
             }
