@@ -697,11 +697,23 @@ impl AppState {
                 None
             }))),
         });
+        // A PDF keeps its page and zoom in the new tab.
+        let pdf_view = self.active_tab().and_then(|t| {
+            let n = t.note()?;
+            self.pdf_views
+                .get(&t.id)
+                .filter(|v| v.path == n.path)
+                .cloned()
+        });
         self.save_all();
         self.ws.layout.split(focused, dir);
         match copy {
             Some(c) => {
-                self.push_tab(c);
+                let at = self.push_tab(c);
+                if let (Some(mut v), Some(id)) = (pdf_view, self.tabs.get(at).map(|t| t.id)) {
+                    v.goto = Some(v.page);
+                    self.pdf_views.insert(id, v);
+                }
             }
             None => self.active = None,
         }

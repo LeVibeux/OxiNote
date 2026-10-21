@@ -204,6 +204,23 @@ fn side_note(state: &AppState) -> Option<NotePath> {
         .cloned()
 }
 
+/// View state of the active tab when it shows a PDF.
+fn pdf_status(state: &AppState) -> Option<crate::pdf::PdfViewState> {
+    let t = state.active_tab()?;
+    let n = t.note()?;
+    if !crate::pdf::is_pdf(&n.path) {
+        return None;
+    }
+    Some(
+        state
+            .pdf_views
+            .get(&t.id)
+            .filter(|v| v.path == n.path)
+            .cloned()
+            .unwrap_or_else(|| crate::pdf::PdfViewState::new(n.path.clone())),
+    )
+}
+
 pub fn status_bar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Action>) {
     let pal = Palette::of(ui.ctx());
     let mode = state.display_mode();
@@ -217,6 +234,7 @@ pub fn status_bar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Act
         .and_then(|p| state.buffers.get(p))
         .map_or(0, |b| b.text.chars().count());
     let info = state.note_info().clone();
+    let pdf = pdf_status(state);
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 14.0;
         let small = |t: String| RichText::new(t).size(12.0).color(pal.muted);
@@ -228,7 +246,16 @@ pub fn status_bar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Act
         {
             actions.push(Action::Exec(Command::ToggleLivePreview));
         }
-        if path.is_some() {
+        if let Some(pdf) = pdf {
+            let zoom = format!("{:.0}%", pdf.zoom * 100.0);
+            ui.label(small(zoom));
+            let page = if pdf.page_count > 0 {
+                format!("Page {} / {}", pdf.page, pdf.page_count)
+            } else {
+                format!("Page {}", pdf.page)
+            };
+            ui.label(small(page));
+        } else if path.is_some() {
             ui.label(small(format!("{chars} characters")));
             ui.label(small(format!("{} words", info.word_count)));
             let r = ui.add(

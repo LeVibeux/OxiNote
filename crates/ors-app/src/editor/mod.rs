@@ -192,6 +192,10 @@ impl AppState {
     pub fn display_mode(&self) -> Option<DisplayMode> {
         let t = self.active_tab()?;
         let n = t.note()?;
+        // Modes only exist for Markdown notes (not PDFs, images, ...).
+        if !n.path.is_markdown() {
+            return None;
+        }
         Some(display_mode(
             n.mode,
             self.editor.live(t.id, self.settings.default_editing_mode),
@@ -207,6 +211,9 @@ impl AppState {
         };
         let id = t.id;
         let Some(n) = t.note_mut() else { return };
+        if !n.path.is_markdown() {
+            return;
+        }
         match mode {
             DisplayMode::Reading => n.mode = crate::state::ViewMode::Reading,
             DisplayMode::LivePreview | DisplayMode::Source => {

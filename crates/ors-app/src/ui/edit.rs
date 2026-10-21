@@ -1356,6 +1356,10 @@ fn edit_body(
                                     actions.push(Action::OpenLine(path.clone(), hd.line, how));
                                 }
                             }
+                        } else if let Some((pdf, page)) =
+                            state.pdf_link(target, subpath.as_deref(), path)
+                        {
+                            actions.push(Action::OpenPdf(pdf, page, how));
                         } else {
                             actions.push(Action::Follow {
                                 target: target.clone(),
@@ -1369,13 +1373,20 @@ fn edit_body(
                             ctx.open_url(egui::OpenUrl::new_tab(dest.clone()));
                         } else {
                             let d = decode_target(dest);
-                            let d = d.split('#').next().unwrap_or("");
+                            let (d, frag) = match d.split_once('#') {
+                                Some((d, f)) => (d, Some(f)),
+                                None => (&*d, None),
+                            };
                             let d = d.strip_suffix(".md").unwrap_or(d);
-                            actions.push(Action::Follow {
-                                target: d.to_string(),
-                                from: path.clone(),
-                                open_in: how,
-                            });
+                            if let Some((pdf, page)) = state.pdf_link(d, frag, path) {
+                                actions.push(Action::OpenPdf(pdf, page, how));
+                            } else {
+                                actions.push(Action::Follow {
+                                    target: d.to_string(),
+                                    from: path.clone(),
+                                    open_in: how,
+                                });
+                            }
                         }
                     }
                     LinkTarget::Tag(t) => actions.push(Action::SearchTag(t.clone())),

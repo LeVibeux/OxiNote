@@ -492,6 +492,7 @@ pub fn pdf_tab(
     let vs = views.entry(tab_id).or_default();
     let mut view = state.pdf_view(tab_id, path).clone();
     view.page = view.page.clamp(1, pages as u32);
+    view.page_count = pages;
 
     // Zoom in effect.
     let avail_w = ui.available_width();

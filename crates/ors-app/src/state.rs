@@ -497,7 +497,11 @@ impl AppState {
     }
 
     pub fn toggle_mode(&mut self) {
-        if let Some(tab) = self.active_tab_mut().and_then(Tab::note_mut) {
+        if let Some(tab) = self
+            .active_tab_mut()
+            .and_then(Tab::note_mut)
+            .filter(|n| n.path.is_markdown())
+        {
             tab.mode = match tab.mode {
                 ViewMode::Source => ViewMode::Reading,
                 ViewMode::Reading => ViewMode::Source,

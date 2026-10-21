@@ -637,6 +637,8 @@ pub struct PdfViewState {
     pub fit_width: bool,
     /// Scroll to this page (1-based) on next draw.
     pub goto: Option<u32>,
+    /// Number of pages once the document is loaded (0 until then).
+    pub page_count: usize,
 }
 
 impl PdfViewState {
@@ -647,6 +649,7 @@ impl PdfViewState {
             zoom: 1.0,
             fit_width: true,
             goto: None,
+            page_count: 0,
         }
     }
 
@@ -681,6 +684,19 @@ impl PdfViewState {
 }
 
 impl AppState {
+    /// If `target` (from a link written in `from`, with an optional
+    /// `#fragment` such as `page=3`) is a PDF, its path and 1-based page.
+    pub fn pdf_link(
+        &self,
+        target: &str,
+        fragment: Option<&str>,
+        from: &NotePath,
+    ) -> Option<(NotePath, u32)> {
+        let p = self.index.resolve(target, from).filter(is_pdf)?;
+        let page = fragment.and_then(|f| parse_params(f).page).unwrap_or(1);
+        Some((p, page))
+    }
+
     /// View state of tab `tab`, reset when it now shows another file.
     pub fn pdf_view(&mut self, tab: TabId, path: &NotePath) -> &mut PdfViewState {
         let e = self
@@ -959,6 +975,43 @@ mod state_tests {
         s.pdf_view(id, &path).fit_width = true;
         let json = serde_json::to_string(&s.saved_workspace()).unwrap();
         assert!(!json.contains("\"zoom\""), "{json}");
+    }
+
+    #[test]
+    fn split_copies_page_and_zoom() {
+        let mut s = state();
+        let path = NotePath::new("d.pdf").unwrap();
+        s.open_pdf_at(&path, 3, OpenIn::NewTab);
+        let id = s.active_tab().unwrap().id;
+        s.pdf_view(id, &path).set_zoom(1.5);
+        s.split_active(crate::workspace::SplitDir::Right);
+        let new = s.active_tab().unwrap().id;
+        assert_ne!(new, id);
+        let v = s.pdf_view(new, &path).clone();
+        assert_eq!((v.page, v.zoom, v.fit_width), (3, 1.5, false));
+        assert_eq!(v.goto, Some(3));
+    }
+
+    #[test]
+    fn pdf_links_carry_their_page() {
+        let s = state();
+        let from = NotePath::new("A.md").unwrap();
+        let got = s.pdf_link("d.pdf", Some("page=4"), &from);
+        assert_eq!(got, Some((NotePath::new("d.pdf").unwrap(), 4)));
+        assert_eq!(s.pdf_link("d.pdf", None, &from).map(|g| g.1), Some(1));
+        assert_eq!(s.pdf_link("A", Some("page=4"), &from), None);
+    }
+
+    #[test]
+    fn pdf_tabs_have_no_editing_mode() {
+        let mut s = state();
+        let path = NotePath::new("d.pdf").unwrap();
+        s.open(&path, OpenIn::NewTab);
+        assert_eq!(s.display_mode(), None);
+        s.toggle_mode();
+        s.set_display_mode(crate::editor::DisplayMode::Reading);
+        let n = s.active_tab().and_then(|t| t.note()).unwrap();
+        assert_eq!(n.mode, crate::state::ViewMode::Source);
     }
 
     #[test]
