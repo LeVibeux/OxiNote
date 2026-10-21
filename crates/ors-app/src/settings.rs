@@ -121,6 +121,10 @@ pub struct Settings {
     pub show_ribbon: bool,
     /// Heading navigator on the right edge of note panels.
     pub heading_navigator: HeadingNavigator,
+    /// What to do when a new release is published.
+    pub update_mode: crate::update::UpdateMode,
+    /// Last check for a new release (Unix seconds).
+    pub update_checked_at: u64,
 }
 
 impl Default for Settings {
@@ -147,6 +151,8 @@ impl Default for Settings {
             right_width: 280.0,
             show_ribbon: true,
             heading_navigator: HeadingNavigator::default(),
+            update_mode: crate::update::UpdateMode::default(),
+            update_checked_at: 0,
         }
     }
 }
