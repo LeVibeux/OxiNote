@@ -2997,7 +2997,7 @@ dependencies = [
 
 [[package]]
 name = "ors-app"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "directories",
@@ -3024,7 +3024,7 @@ dependencies = [
 
 [[package]]
 name = "ors-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -3039,7 +3039,7 @@ dependencies = [
 
 [[package]]
 name = "ors-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -3048,14 +3048,14 @@ dependencies = [
 
 [[package]]
 name = "ors-graph"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ors-core",
 ]
 
 [[package]]
 name = "ors-index"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ors-core",
  "ors-markdown",
@@ -3066,7 +3066,7 @@ dependencies = [
 
 [[package]]
 name = "ors-markdown"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "ors-core",
  "percent-encoding",
@@ -3077,7 +3077,7 @@ dependencies = [
 
 [[package]]
 name = "ors-vault"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "notify-debouncer-full",
