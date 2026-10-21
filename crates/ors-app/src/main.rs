@@ -126,6 +126,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
     Ok(cli)
 }
 
+const ICON_PNG: &[u8] = include_bytes!("../assets/obsirust-icon.png");
+
 fn main() {
     let cli = match parse_args(std::env::args().skip(1)) {
         Ok(c) => c,
@@ -135,12 +137,17 @@ fn main() {
         }
     };
     let screenshot_mode = cli.startup.screenshot.is_some();
+    let mut viewport = eframe::egui::ViewportBuilder::default()
+        .with_title("ObsiRust")
+        .with_app_id("obsirust")
+        .with_inner_size([cli.size.0, cli.size.1])
+        .with_min_inner_size([640.0, 400.0]);
+    match eframe::icon_data::from_png_bytes(ICON_PNG) {
+        Ok(icon) => viewport = viewport.with_icon(std::sync::Arc::new(icon)),
+        Err(e) => eprintln!("obsirust-app: invalid window icon: {e}"),
+    }
     let options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
-            .with_title("ObsiRust")
-            .with_app_id("obsirust")
-            .with_inner_size([cli.size.0, cli.size.1])
-            .with_min_inner_size([640.0, 400.0]),
+        viewport,
         renderer: cli.renderer,
         persist_window: !screenshot_mode,
         ..Default::default()
@@ -163,6 +170,12 @@ mod tests {
 
     fn args(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn window_icon_decodes() {
+        let icon = eframe::icon_data::from_png_bytes(ICON_PNG).unwrap();
+        assert_eq!((icon.width, icon.height), (256, 256));
     }
 
     #[test]
