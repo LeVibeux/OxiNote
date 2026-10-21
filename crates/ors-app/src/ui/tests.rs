@@ -690,3 +690,35 @@ fn heading_tick_click_also_scrolls_the_reading_view() {
     frames(&mut app, &ctx, 30);
     assert!(app.caches.nav.offsets[&tab] > 200.0);
 }
+
+fn column_right(active: bool) -> f32 {
+    let ctx = egui::Context::default();
+    let mut right = 0.0;
+    let input = RawInput {
+        screen_rect: Some(Rect::from_min_size(
+            pos2(0.0, 0.0),
+            egui::vec2(800.0, 600.0),
+        )),
+        ..RawInput::default()
+    };
+    let mut out = ctx.run_ui(input, |ui| {
+        editor::set_nav_reserve(active);
+        editor::readable_column(ui, false, |ui| {
+            right = ui.max_rect().right();
+        });
+    });
+    out.textures_delta.clear();
+    editor::set_nav_reserve(false);
+    right
+}
+
+#[test]
+fn the_column_keeps_a_right_margin_when_the_navigator_is_active() {
+    let off = column_right(false);
+    let on = column_right(true);
+    assert!(
+        off - on >= editor::NAV_RESERVE / 2.0,
+        "off {off} on {on}: column must shrink away from the strip"
+    );
+    assert!(800.0 - on >= editor::NAV_RESERVE);
+}

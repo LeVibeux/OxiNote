@@ -723,6 +723,7 @@ fn leaf_content(
                 && state.settings.heading_navigator != crate::settings::HeadingNavigator::Off)
                 .then(|| caches.nav.headings(tab_id, state, &path));
             caches.nav.ys = None;
+            editor::set_nav_reserve(heads.as_ref().is_some_and(|h| !h.is_empty()));
             let scroll_out = egui::ScrollArea::vertical()
                 .id_salt(("note-scroll", tab_id, mode == ViewMode::Reading))
                 .auto_shrink([false, false])

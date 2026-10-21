@@ -27,6 +27,23 @@ pub fn readable_column<R>(
     readable_column_with(ui, readable, 0.0, add)
 }
 
+/// Right margin (points) kept free for the heading navigator strip.
+pub const NAV_RESERVE: f32 = 32.0;
+
+thread_local! {
+    static NAV_RESERVE_NOW: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
+}
+
+/// Declare (for this frame's note view) whether the heading navigator is
+/// active, so columns keep its strip free.
+pub fn set_nav_reserve(active: bool) {
+    NAV_RESERVE_NOW.set(if active { NAV_RESERVE } else { 0.0 });
+}
+
+fn nav_reserve() -> f32 {
+    NAV_RESERVE_NOW.get()
+}
+
 /// Like [`readable_column`], keeping `left_extra` points free on the left
 /// of the text (line numbers, fold arrows).
 pub fn readable_column_with<R>(
@@ -35,7 +52,7 @@ pub fn readable_column_with<R>(
     left_extra: f32,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let avail = ui.available_width() - left_extra;
+    let avail = ui.available_width() - left_extra - nav_reserve();
     let width = if readable {
         (avail - 32.0).min(READABLE_WIDTH)
     } else {
