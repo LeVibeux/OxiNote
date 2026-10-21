@@ -33,6 +33,8 @@ pub enum RightPane {
     LocalGraph,
     /// Properties of the active note.
     FileProperties,
+    /// Git history of the active note.
+    History,
 }
 
 /// How the frontmatter is shown in notes (Obsidian's "Properties in

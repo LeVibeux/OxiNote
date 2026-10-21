@@ -30,10 +30,12 @@ pub enum WsCommand {
     MoveFile,
     DuplicateFile,
     CopyPath,
+    GitBackupNow,
+    GitOpenHistory,
 }
 
 impl WsCommand {
-    pub const ALL: [WsCommand; 21] = [
+    pub const ALL: [WsCommand; 23] = [
         WsCommand::SplitRight,
         WsCommand::SplitDown,
         WsCommand::TogglePin,
@@ -55,6 +57,8 @@ impl WsCommand {
         WsCommand::MoveFile,
         WsCommand::DuplicateFile,
         WsCommand::CopyPath,
+        WsCommand::GitBackupNow,
+        WsCommand::GitOpenHistory,
     ];
 
     pub fn name(self) -> &'static str {
@@ -81,6 +85,8 @@ impl WsCommand {
             MoveFile => "Move current file to another folder",
             DuplicateFile => "Make a copy of the current file",
             CopyPath => "Copy file path",
+            GitBackupNow => "Git : sauvegarder maintenant",
+            GitOpenHistory => "Git : ouvrir l'historique de la note",
         }
     }
 
@@ -109,6 +115,8 @@ impl WsCommand {
             MoveFile => "file-explorer:move-file",
             DuplicateFile => "file-explorer:duplicate-file",
             CopyPath => "workspace:copy-path",
+            GitBackupNow => "obsirust:git-backup-now",
+            GitOpenHistory => "obsirust:git-open-history",
         }
     }
 

@@ -17,6 +17,7 @@ mod commands;
 mod editor;
 mod explorer;
 mod fake;
+mod git_backup;
 mod graph_model;
 mod highlight;
 mod hotkeys;
@@ -100,6 +101,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
                     "outline" => RightPane::Outline,
                     "graph" | "localgraph" => RightPane::LocalGraph,
                     "properties" => RightPane::FileProperties,
+                    "history" => RightPane::History,
                     _ => RightPane::Backlinks,
                 });
             }

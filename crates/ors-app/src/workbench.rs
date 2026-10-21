@@ -52,6 +52,7 @@ pub enum SettingsPage {
     CorePlugins,
     DailyNotes,
     Templates,
+    GitBackup,
     About,
 }
 
@@ -215,6 +216,7 @@ fn right_pane_name(p: RightPane) -> &'static str {
         RightPane::Outline => "outline",
         RightPane::LocalGraph => "localgraph",
         RightPane::FileProperties => "file-properties",
+        RightPane::History => "obsirust-git-history",
     }
 }
 
@@ -224,6 +226,7 @@ fn right_pane_from(s: &str) -> RightPane {
         "outline" => RightPane::Outline,
         "localgraph" => RightPane::LocalGraph,
         "file-properties" => RightPane::FileProperties,
+        "obsirust-git-history" => RightPane::History,
         _ => RightPane::Backlinks,
     }
 }
@@ -1006,6 +1009,8 @@ impl AppState {
                     self.ws.clipboard = Some(p.as_str().to_string());
                 }
             }
+            GitBackupNow => self.git_backup_now(),
+            GitOpenHistory => self.git_open_history(),
         }
     }
 }
