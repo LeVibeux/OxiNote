@@ -317,7 +317,9 @@ impl Layout {
         let mut index = index;
         if from == to
             && let (Some(g), Some(i)) = (self.group(to), index)
-            && let Some(cur) = self.group(to).and_then(|g| g.tabs.iter().position(|t| *t == tab))
+            && let Some(cur) = self
+                .group(to)
+                .and_then(|g| g.tabs.iter().position(|t| *t == tab))
             && cur < i
         {
             // Removing the tab first shifts the target index.
@@ -387,29 +389,6 @@ impl Layout {
         for id in ids {
             self.collapse_if_empty(id);
         }
-    }
-
-    /// Rebuild from a saved tree: `groups` are created as leaves are met.
-    pub fn from_parts(root: Node, groups: Vec<Group>, focused: GroupId) -> Self {
-        let next_id = groups.iter().map(|g| g.id).max().unwrap_or(0) + 1;
-        let mut l = Self {
-            root,
-            groups,
-            focused,
-            pinned: BTreeSet::new(),
-            next_id,
-        };
-        if l.group(l.focused).is_none() {
-            l.focused = l.ordered_groups().first().copied().unwrap_or(1);
-        }
-        l
-    }
-
-    /// Allocate a fresh group id (for building saved layouts).
-    pub fn fresh_id(&mut self) -> GroupId {
-        let id = self.next_id;
-        self.next_id += 1;
-        id
     }
 }
 

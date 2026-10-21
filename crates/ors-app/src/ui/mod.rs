@@ -2,13 +2,19 @@
 //! state changes go through [`AppState`] (via [`Action`]s collected while
 //! drawing, applied at the end of the frame).
 
+mod dialogs;
 mod editor;
+mod explorer_ui;
 mod graph;
+mod groups;
+mod icons;
 mod modals;
 mod panes;
+mod settings_ui;
 #[cfg(test)]
 mod tests;
 pub mod theme;
+mod ws_ui;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -42,12 +48,11 @@ pub enum Action {
     Modal(Modal),
     Confirm(Modal),
     NewNoteIn(String),
-    Activate(usize),
-    CloseTab(TabId),
-    MoveTab(usize, usize),
     Resolve(NotePath, bool),
     Edited(NotePath),
     ShowBacklinks,
+    /// Workspace area (explorer, bookmarks, tab groups).
+    Ws(ws_ui::WsAction),
 }
 
 fn apply(state: &mut AppState, action: Action) {
@@ -67,11 +72,9 @@ fn apply(state: &mut AppState, action: Action) {
         Action::NewNoteIn(folder) => {
             state.create_note_in(&folder, "Untitled", OpenIn::NewTab);
         }
-        Action::Activate(i) => state.set_active(i),
-        Action::CloseTab(id) => state.close_tab_by_id(id),
-        Action::MoveTab(a, b) => state.move_tab(a, b),
         Action::Resolve(p, keep) => state.resolve_conflict(&p, keep),
         Action::Edited(p) => state.buffer_edited(&p),
+        Action::Ws(a) => ws_ui::apply(state, a),
         Action::ShowBacklinks => {
             state.settings.right_open = true;
             state.settings.right_pane = RightPane::Backlinks;
@@ -86,8 +89,7 @@ pub struct UiCaches {
     highlight: HashMap<TabId, (u64, LayoutJob)>,
     reading: HashMap<NotePath, editor::Rendered>,
     completion: Option<editor::Completion>,
-    tree: panes::FolderNode,
-    tree_key: Option<(usize, usize, u64)>,
+    explorer: explorer_ui::ExplorerCache,
 }
 
 impl UiCaches {
@@ -124,6 +126,10 @@ pub struct Startup {
     pub right: Option<RightPane>,
     /// Ignore persisted settings.
     pub fresh: bool,
+    /// Open the settings window (`--settings [page]`).
+    pub settings: Option<String>,
+    /// Split the workspace and open the next notes in the right group.
+    pub split: bool,
 }
 
 pub struct ObsiApp {
@@ -139,6 +145,7 @@ pub struct ObsiApp {
     shot_done: Arc<AtomicBool>,
     shot_requested: bool,
     theme_applied: Option<ThemeChoice>,
+    look_applied: Option<(Option<[u8; 3]>, u32, bool)>,
     start: Instant,
     title: String,
 }
@@ -189,6 +196,7 @@ impl ObsiApp {
             shot_done: Arc::new(AtomicBool::new(false)),
             shot_requested: false,
             theme_applied: None,
+            look_applied: None,
             start: Instant::now(),
             title: String::new(),
         };
@@ -237,6 +245,10 @@ impl ObsiApp {
             return;
         };
         let s = &self.startup;
+        state.ws.read_only = s.screenshot.is_some();
+        if s.open.is_empty() && !s.fresh && !state.ws.read_only {
+            state.restore_workspace();
+        }
         for (i, name) in s.open.iter().enumerate() {
             let how = if i == 0 {
                 OpenIn::CurrentTab
@@ -254,6 +266,9 @@ impl ObsiApp {
                 state.toggle_mode();
             }
         }
+        if let Some(p) = state.active_note().cloned() {
+            state.ws.explorer.reveal(&p);
+        }
         if let Some(l) = s.left {
             state.settings.left_pane = l;
         }
@@ -266,6 +281,23 @@ impl ObsiApp {
         }
         if s.graph {
             state.open_graph(false);
+        }
+        if s.split {
+            state.exec_ws(crate::ws_commands::WsCommand::SplitRight);
+        }
+        if let Some(page) = &s.settings {
+            use crate::workbench::SettingsPage as P;
+            let page = match page.as_str() {
+                "files" => P::FilesLinks,
+                "appearance" => P::Appearance,
+                "hotkeys" => P::Hotkeys,
+                "plugins" => P::CorePlugins,
+                "daily" => P::DailyNotes,
+                "templates" => P::Templates,
+                "about" => P::About,
+                _ => P::Editor,
+            };
+            state.open_settings(page);
         }
         if s.palette {
             state.modal = Some(Modal::CommandPalette {
@@ -432,44 +464,44 @@ impl ObsiApp {
 }
 
 fn ribbon(ui: &mut egui::Ui, state: &AppState, actions: &mut Vec<Action>) {
-    let pal = Palette::of(ui.ctx());
     ui.add_space(6.0);
+    let button = |ui: &mut egui::Ui, icon: &str, cmd: Command, actions: &mut Vec<Action>| {
+        let name = state.commands.get(cmd).map_or("", |s| s.name);
+        let tip = match state.commands.shortcut(cmd) {
+            Some(k) => format!("{name} ({})", ui.ctx().format_shortcut(&k)),
+            None => name.to_string(),
+        };
+        if explorer_ui::icon_button(ui, icon, &tip, false).clicked() {
+            actions.push(Action::Exec(cmd));
+        }
+    };
     ui.vertical_centered(|ui| {
         let items: [(&str, Command); 7] = [
-            ("☰", Command::ToggleLeftSidebar),
-            ("🔍", Command::QuickSwitcher),
-            ("⎔", Command::OpenGraph),
-            ("📅", Command::OpenDailyNote),
-            ("📝", Command::NewNote),
-            (">_", Command::CommandPalette),
-            ("◐", Command::ToggleTheme),
+            (icons::SIDEBAR, Command::ToggleLeftSidebar),
+            (icons::SEARCH, Command::QuickSwitcher),
+            (icons::GRAPH, Command::OpenGraph),
+            (icons::CALENDAR, Command::OpenDailyNote),
+            (icons::NOTE_PENCIL, Command::NewNote),
+            (icons::TERMINAL, Command::CommandPalette),
+            (icons::CIRCLE_HALF, Command::ToggleTheme),
         ];
         for (icon, cmd) in items {
-            let name = state.commands.get(cmd).map_or("", |s| s.name);
-            let tip = match state.commands.shortcut(cmd) {
-                Some(k) => format!("{name} ({})", ui.ctx().format_shortcut(&k)),
-                None => name.to_string(),
-            };
-            if ui
-                .add(
-                    egui::Button::new(RichText::new(icon).size(16.0).color(pal.muted)).frame(false),
-                )
-                .on_hover_text(tip)
-                .clicked()
-            {
-                actions.push(Action::Exec(cmd));
+            if state.commands.is_hidden(cmd) {
+                continue;
             }
-            ui.add_space(6.0);
+            button(ui, icon, cmd, actions);
+            ui.add_space(2.0);
         }
         ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
             ui.add_space(6.0);
-            if ui
-                .add(egui::Button::new(RichText::new("⇄").size(16.0).color(pal.muted)).frame(false))
-                .on_hover_text("Open another vault")
-                .clicked()
-            {
-                actions.push(Action::Exec(Command::SwitchVault));
-            }
+            button(
+                ui,
+                icons::GEAR,
+                Command::Ws(crate::ws_commands::WsCommand::OpenSettings),
+                actions,
+            );
+            ui.add_space(2.0);
+            button(ui, icons::VAULT, Command::SwitchVault, actions);
         });
     });
 }
@@ -497,11 +529,11 @@ fn view_header(ui: &mut egui::Ui, state: &AppState, actions: &mut Vec<Action>) {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if note.path.is_markdown() {
                 let (icon, tip) = match note.mode {
-                    ViewMode::Source => ("📖", "Reading view (Ctrl+E)"),
-                    ViewMode::Reading => ("✏", "Editing view (Ctrl+E)"),
+                    ViewMode::Source => (icons::BOOK_OPEN, "Reading view (Ctrl+E)"),
+                    ViewMode::Reading => (icons::PENCIL, "Editing view (Ctrl+E)"),
                 };
                 if ui
-                    .add(egui::Button::new(RichText::new(icon).color(pal.muted)).frame(false))
+                    .add(egui::Button::new(icons::text(icon, 16.0).color(pal.muted)).frame(false))
                     .on_hover_text(tip)
                     .clicked()
                 {
@@ -512,25 +544,14 @@ fn view_header(ui: &mut egui::Ui, state: &AppState, actions: &mut Vec<Action>) {
     });
 }
 
-fn central(
+/// View of the active tab of the group being drawn (`state.active`).
+fn leaf_content(
     ui: &mut egui::Ui,
     state: &mut AppState,
     caches: &mut UiCaches,
     actions: &mut Vec<Action>,
 ) {
     let pal = Palette::of(ui.ctx());
-    Frame::new()
-        .fill(pal.bg_secondary)
-        .inner_margin(Margin {
-            left: 4,
-            right: 4,
-            top: 4,
-            bottom: 0,
-        })
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            panes::tab_bar(ui, state, actions);
-        });
     let Some(i) = state.active else {
         ui.add_space(ui.available_height() * 0.3);
         ui.vertical_centered(|ui| {
@@ -633,18 +654,27 @@ impl ObsiApp {
         let mut actions: Vec<Action> = Vec::new();
 
         // Shortcuts (shared with the palette through the registry).
-        for (shortcut, cmd) in state.commands.by_specificity() {
-            if ctx.input_mut(|i| i.consume_shortcut(&shortcut)) {
-                actions.push(Action::Exec(cmd));
+        let capturing = state
+            .ws
+            .settings_window
+            .as_ref()
+            .is_some_and(|w| w.capture.is_some());
+        if !capturing {
+            for (shortcut, cmd) in state.commands.by_specificity() {
+                if ctx.input_mut(|i| i.consume_shortcut(&shortcut)) {
+                    actions.push(Action::Exec(cmd));
+                }
             }
         }
         let pal = Palette::of(&ctx);
 
-        egui::Panel::left("ribbon")
-            .exact_size(40.0)
-            .resizable(false)
-            .frame(Frame::new().fill(pal.bg_secondary))
-            .show(ui, |ui| ribbon(ui, state, &mut actions));
+        if state.settings.show_ribbon {
+            egui::Panel::left("ribbon")
+                .exact_size(40.0)
+                .resizable(false)
+                .frame(Frame::new().fill(pal.bg_secondary))
+                .show(ui, |ui| ribbon(ui, state, &mut actions));
+        }
         egui::Panel::bottom("status")
             .exact_size(24.0)
             .frame(
@@ -654,8 +684,9 @@ impl ObsiApp {
             )
             .show(ui, |ui| panes::status_bar(ui, state, &mut actions));
         if state.settings.left_open {
-            egui::Panel::left("left-sidebar")
-                .default_size(250.0)
+            let w = state.settings.left_width;
+            let r = egui::Panel::left("left-sidebar")
+                .default_size(w)
                 .size_range(160.0..=500.0)
                 .resizable(true)
                 .frame(
@@ -666,10 +697,12 @@ impl ObsiApp {
                 .show(ui, |ui| {
                     panes::left_sidebar(ui, state, caches, &mut actions)
                 });
+            state.settings.left_width = r.response.rect.width();
         }
         if state.settings.right_open {
-            egui::Panel::right("right-sidebar")
-                .default_size(270.0)
+            let w = state.settings.right_width;
+            let r = egui::Panel::right("right-sidebar")
+                .default_size(w)
                 .size_range(160.0..=500.0)
                 .resizable(true)
                 .frame(
@@ -678,10 +711,13 @@ impl ObsiApp {
                         .inner_margin(Margin::symmetric(8, 4)),
                 )
                 .show(ui, |ui| panes::right_sidebar(ui, state, &mut actions));
+            state.settings.right_width = r.response.rect.width();
         }
         egui::CentralPanel::default()
             .frame(Frame::new().fill(pal.bg_primary))
-            .show(ui, |ui| central(ui, state, caches, &mut actions));
+            .show(ui, |ui| {
+                groups::workspace_area(ui, state, caches, &mut actions)
+            });
 
         if let Some(m) = state.modal.take() {
             let keep = modals::show(&ctx, state, m, &mut actions);
@@ -689,11 +725,21 @@ impl ObsiApp {
                 state.modal = keep;
             }
         }
+        if let Some(d) = state.ws.dialog.take() {
+            let keep = dialogs::show(&ctx, state, d);
+            if state.ws.dialog.is_none() {
+                state.ws.dialog = keep;
+            }
+        }
+        settings_ui::show(&ctx, state);
+        groups::drag_preview(&ctx);
         toasts(&ctx, state);
 
         for a in actions {
             apply(state, a);
         }
+        ws_ui::flush_pending(&ctx, state);
+        state.maybe_save_workspace();
 
         // Scheduling.
         if let Some(t) = state.next_autosave_in() {
@@ -732,6 +778,19 @@ impl eframe::App for ObsiApp {
         if self.theme_applied != Some(theme) {
             theme::apply_choice(&ctx, theme);
             self.theme_applied = Some(theme);
+        }
+        let look = self.state.as_ref().map_or(&self.settings, |s| &s.settings);
+        let look_key = (
+            look.accent,
+            look.ui_font_size.to_bits(),
+            look.text_font == "Inter",
+        );
+        if self.look_applied != Some(look_key) {
+            if self.look_applied.is_none_or(|k| k.2 != look_key.2) {
+                theme::install_fonts(&ctx, look_key.2);
+            }
+            theme::apply_settings(&ctx, look_key.0, look.ui_font_size);
+            self.look_applied = Some(look_key);
         }
         if self.state.is_some() {
             self.workspace(ui);

@@ -32,8 +32,6 @@ pub enum OpenIn {
     NewTab,
     /// New tab in a new group to the right of the focused one.
     SplitRight,
-    /// New tab in a new group below the focused one.
-    SplitDown,
 }
 
 /// A note (or attachment) tab with its own navigation history.
@@ -435,6 +433,7 @@ impl AppState {
         }
     }
 
+    #[cfg(test)]
     pub fn move_tab(&mut self, from: usize, to: usize) {
         if from >= self.tabs.len() || to >= self.tabs.len() || from == to {
             return;
@@ -494,16 +493,9 @@ impl AppState {
         self.recent_files.retain(|p| p != path);
         self.recent_files.insert(0, path.clone());
         self.recent_files.truncate(30);
-        match open_in {
-            OpenIn::SplitRight => {
-                let g = self.ws.layout.focused;
-                self.ws.layout.split(g, crate::workspace::SplitDir::Right);
-            }
-            OpenIn::SplitDown => {
-                let g = self.ws.layout.focused;
-                self.ws.layout.split(g, crate::workspace::SplitDir::Down);
-            }
-            _ => {}
+        if open_in == OpenIn::SplitRight {
+            let g = self.ws.layout.focused;
+            self.ws.layout.split(g, crate::workspace::SplitDir::Right);
         }
         let pinned = self
             .active_tab()
@@ -1268,10 +1260,10 @@ impl AppState {
                 }
             }
             Command::CloseTab => {
-                if let Some(i) = self.active {
-                    if !self.ws.layout.is_pinned(self.tabs[i].id) {
-                        self.close_tab(i);
-                    }
+                if let Some(i) = self.active
+                    && !self.ws.layout.is_pinned(self.tabs[i].id)
+                {
+                    self.close_tab(i);
                 }
             }
             Command::NextTab => self.cycle_tab(1),

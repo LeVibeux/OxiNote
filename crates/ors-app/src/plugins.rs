@@ -114,7 +114,10 @@ impl CorePlugins {
 
     /// Plugins missing from the file are enabled (fresh vault).
     pub fn is_enabled(&self, p: CorePlugin) -> bool {
-        self.map.get(p.id()).and_then(Value::as_bool).unwrap_or(true)
+        self.map
+            .get(p.id())
+            .and_then(Value::as_bool)
+            .unwrap_or(true)
     }
 
     pub fn set(&mut self, p: CorePlugin, enabled: bool) {

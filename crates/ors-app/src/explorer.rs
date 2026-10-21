@@ -226,7 +226,13 @@ impl ExplorerState {
 
     /// Click on a row with modifiers: returns true when it is a plain click
     /// (the caller then opens the file).
-    pub fn click(&mut self, target: &FsTarget, ctrl: bool, shift: bool, visible: &[FsTarget]) -> bool {
+    pub fn click(
+        &mut self,
+        target: &FsTarget,
+        ctrl: bool,
+        shift: bool,
+        visible: &[FsTarget],
+    ) -> bool {
         if shift && let Some(anchor) = &self.anchor {
             let a = visible.iter().position(|t| t == anchor);
             let b = visible.iter().position(|t| t == target);
@@ -359,7 +365,7 @@ impl AppState {
             self.error("Cannot move a folder into itself");
             return false;
         }
-        if self.folders.iter().any(|f| *f == to) {
+        if self.folders.contains(&to) {
             self.error(format!("{to} already exists"));
             return false;
         }
@@ -589,7 +595,10 @@ mod tests {
             &["a".into(), "B".into(), "a/empty".into()],
             SortOrder::NameAsc,
         );
-        assert_eq!(t.folders.iter().map(|f| f.0.as_str()).collect::<Vec<_>>(), ["a", "B"]);
+        assert_eq!(
+            t.folders.iter().map(|f| f.0.as_str()).collect::<Vec<_>>(),
+            ["a", "B"]
+        );
         assert_eq!(t.folders[0].1.folders[0].0, "empty");
         let mut expanded = BTreeSet::new();
         let mut rows = Vec::new();

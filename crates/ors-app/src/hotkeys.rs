@@ -270,14 +270,24 @@ mod tests {
         let orig: Value = serde_json::from_str(src).unwrap();
         assert_eq!(out, orig);
         // Resetting to the default removes the entry.
-        r.set_shortcut(Command::QuickSwitcher, CommandRegistry::default().shortcut(Command::QuickSwitcher));
+        r.set_shortcut(
+            Command::QuickSwitcher,
+            CommandRegistry::default().shortcut(Command::QuickSwitcher),
+        );
         let out: Value = serde_json::from_str(&to_json(&r, src)).unwrap();
         assert!(out.get("switcher:open").is_none());
     }
 
     #[test]
     fn keys_and_display() {
-        for key in [Key::Comma, Key::F2, Key::Tab, Key::Space, Key::A, Key::ArrowUp] {
+        for key in [
+            Key::Comma,
+            Key::F2,
+            Key::Tab,
+            Key::Space,
+            Key::A,
+            Key::ArrowUp,
+        ] {
             let sc = KeyboardShortcut::new(Modifiers::COMMAND, key);
             assert_eq!(from_obsidian(&to_obsidian(&sc)), Some(sc), "{key:?}");
         }

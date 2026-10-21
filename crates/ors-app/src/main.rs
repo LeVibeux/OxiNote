@@ -67,6 +67,8 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
                     .map_err(|_| "--frames expects a number".to_string())?;
             }
             "--open" => s.open.push(value(&mut it, &a)?),
+            "--settings" => s.settings = Some(value(&mut it, &a)?),
+            "--split" => s.split = true,
             "--switcher" => s.switcher = Some(value(&mut it, &a)?),
             "--search" => s.search = Some(value(&mut it, &a)?),
             "--theme" => {
@@ -80,6 +82,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
                 s.left = Some(match value(&mut it, &a)?.as_str() {
                     "search" => LeftPane::Search,
                     "tags" => LeftPane::Tags,
+                    "bookmarks" => LeftPane::Bookmarks,
                     _ => LeftPane::Files,
                 });
             }

@@ -122,9 +122,6 @@ pub struct Bookmarks {
     pub extra: Map<String, Value>,
 }
 
-/// Address of an item: indices from the top level down through groups.
-pub type BookmarkPath = Vec<usize>;
-
 impl Bookmarks {
     pub fn from_json(s: &str) -> Self {
         serde_json::from_str(s).unwrap_or_default()
@@ -199,11 +196,6 @@ impl Bookmarks {
             list = list.get(i)?.items.as_ref()?;
         }
         list.get(*last)
-    }
-
-    pub fn get_mut(&mut self, path: &[usize]) -> Option<&mut Bookmark> {
-        let (last, parent) = path.split_last()?;
-        self.list_mut(parent)?.get_mut(*last)
     }
 
     pub fn remove(&mut self, path: &[usize]) -> Option<Bookmark> {

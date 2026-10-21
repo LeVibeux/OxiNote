@@ -81,6 +81,8 @@ pub struct Workbench {
     pub pending_insert: Option<String>,
     /// Text to put on the clipboard (UI applies it).
     pub clipboard: Option<String>,
+    /// Never write `workspace-obsirust.json` (screenshot mode).
+    pub read_only: bool,
     /// Last saved workspace JSON (to save only on change).
     saved_layout: String,
     last_layout_check: f64,
@@ -364,7 +366,10 @@ impl AppState {
         );
         match s.accent {
             Some([r, g, b]) => {
-                look.insert("accentColor".into(), format!("#{r:02x}{g:02x}{b:02x}").into());
+                look.insert(
+                    "accentColor".into(),
+                    format!("#{r:02x}{g:02x}{b:02x}").into(),
+                );
             }
             None => {
                 look.insert("accentColor".into(), "".into());
@@ -448,6 +453,9 @@ impl AppState {
 
     /// Save the layout if it changed. Returns true if written.
     pub fn save_workspace(&mut self) -> bool {
+        if self.ws.read_only {
+            return false;
+        }
         let json = serde_json::to_string_pretty(&self.saved_workspace()).unwrap_or_default();
         if json == self.ws.saved_layout {
             return false;
@@ -677,13 +685,6 @@ impl AppState {
     pub fn move_tab_to_split(&mut self, id: crate::state::TabId, group: GroupId, dir: SplitDir) {
         self.ws.layout.move_to_split(id, group, dir);
         self.sync_active_from_layout();
-    }
-
-    /// Open `path` in a new split of `group` (file dropped on an edge).
-    pub fn open_in_split(&mut self, path: &NotePath, group: GroupId, dir: SplitDir) {
-        self.ws.layout.focus_group(group);
-        self.ws.layout.split(group, dir);
-        self.open(path, OpenIn::NewTab);
     }
 
     pub fn open_in_group(&mut self, path: &NotePath, group: GroupId) {
@@ -1187,7 +1188,10 @@ mod tests {
         assert_eq!(t.settings.left_pane, LeftPane::Bookmarks);
         assert_eq!(t.settings.left_width, 333.0);
         assert_eq!(t.ws.explorer.sort, SortOrder::ModifiedNewest);
-        assert!(t.active_tab().is_some_and(|x| x.note().is_none()), "graph focused");
+        assert!(
+            t.active_tab().is_some_and(|x| x.note().is_none()),
+            "graph focused"
+        );
         let b = t.tabs.iter().find(|x| x.title() == "B").unwrap();
         assert_eq!(b.note().unwrap().mode, ViewMode::Reading);
         assert_eq!(t.ws.layout.pinned.len(), 1);
@@ -1234,7 +1238,10 @@ mod tests {
         s.add_bookmark(Bookmark::heading("Alpha.md", "Sub", 1));
         let h = s.ws.bookmarks.items[2].clone();
         s.open_bookmark(&h, OpenIn::CurrentTab);
-        let line = s.active_tab().and_then(Tab::note).and_then(|n| n.pending_line);
+        let line = s
+            .active_tab()
+            .and_then(Tab::note)
+            .and_then(|n| n.pending_line);
         assert_eq!(line, Some(1));
         s.exec_ws(WsCommand::BookmarkFile);
         assert!(!s.ws.bookmarks.has_file("Alpha.md"));
@@ -1304,9 +1311,15 @@ mod tests {
             .unwrap();
         s.save_vault_settings();
         let app = s.vault.read_config_file("app.json").unwrap();
-        assert!(app.contains("\"foo\": 1") && app.contains("showLineNumber"), "{app}");
+        assert!(
+            app.contains("\"foo\": 1") && app.contains("showLineNumber"),
+            "{app}"
+        );
         let look = s.vault.read_config_file(APPEARANCE_JSON).unwrap();
-        assert!(look.contains("#12abef") && look.contains("moonstone"), "{look}");
+        assert!(
+            look.contains("#12abef") && look.contains("moonstone"),
+            "{look}"
+        );
         let mut fresh = Settings::default();
         apply_vault_settings(&mut fresh, Some(&app), Some(&look));
         assert!(fresh.show_line_numbers && fresh.default_reading_view);
@@ -1315,7 +1328,10 @@ mod tests {
         // New tabs follow the default view mode.
         s.settings.default_reading_view = true;
         s.open(&p("B.md"), OpenIn::NewTab);
-        assert_eq!(s.active_tab().unwrap().note().unwrap().mode, ViewMode::Reading);
+        assert_eq!(
+            s.active_tab().unwrap().note().unwrap().mode,
+            ViewMode::Reading
+        );
     }
 
     #[test]
@@ -1335,9 +1351,19 @@ mod tests {
             FsTarget::File(p("A.md")),
         ]);
         assert!(!s.files.contains(&p("A.md")));
-        assert!(!s.files.iter().any(|f| f.as_str().starts_with("Journal/dir/")));
-        assert!(s.rename_target(&FsTarget::File(p("Journal/2026-01-01.md")), "bad/name").is_err());
-        assert!(s.rename_target(&FsTarget::File(p("Journal/2026-01-01.md")), "First").is_ok());
+        assert!(
+            !s.files
+                .iter()
+                .any(|f| f.as_str().starts_with("Journal/dir/"))
+        );
+        assert!(
+            s.rename_target(&FsTarget::File(p("Journal/2026-01-01.md")), "bad/name")
+                .is_err()
+        );
+        assert!(
+            s.rename_target(&FsTarget::File(p("Journal/2026-01-01.md")), "First")
+                .is_ok()
+        );
         assert!(s.files.contains(&p("Journal/First.md")));
     }
 }

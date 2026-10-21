@@ -24,6 +24,7 @@ fn app() -> ObsiApp {
         shot_done: Arc::new(AtomicBool::new(false)),
         shot_requested: false,
         theme_applied: None,
+        look_applied: None,
         start: Instant::now(),
         title: String::new(),
     }
