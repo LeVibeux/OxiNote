@@ -13,6 +13,7 @@ use eframe::egui::{
     text::CCursor,
 };
 
+use super::edit_deco::{LineRow, line_rows};
 use super::editor::styled_font;
 use super::theme::Palette;
 use crate::editor::blocks::{BlockKind, bars};
@@ -26,6 +27,8 @@ pub struct Geo<'a> {
     pub decor: &'a Decor,
     pub text: &'a str,
     line_chars: Vec<usize>,
+    /// Galley rows of every logical line: cheap vertical extents.
+    rows: Vec<LineRow>,
 }
 
 impl<'a> Geo<'a> {
@@ -42,6 +45,7 @@ impl<'a> Geo<'a> {
             decor,
             text,
             line_chars,
+            rows: line_rows(galley),
         }
     }
 
@@ -54,8 +58,13 @@ impl<'a> Geo<'a> {
             .translate(self.off)
     }
 
-    /// Top and bottom of line `n`.
+    /// Top and bottom of line `n`. Read from the galley rows: unlike
+    /// [`Self::rect_at`] (which walks the galley), this is O(1), so callers
+    /// cull off-screen lines with it before asking for exact positions.
     pub fn span(&self, n: usize) -> (f32, f32) {
+        if let Some(r) = self.rows.get(n) {
+            return (self.off.y + r.top, self.off.y + r.bottom);
+        }
         let l = &self.decor.lines[n];
         (
             self.rect_at(n, l.range.start).top(),
@@ -201,17 +210,17 @@ fn table_grid(geo: &Geo, start: usize, end: usize, look: &Look, out: &mut Vec<Sh
     if header_bars.len() < 2 {
         return;
     }
+    let (y0, _) = geo.span(start);
+    let (_, y1) = geo.span(end);
+    if !visible(look, y0, y1) {
+        return;
+    }
     let bar_x = |n: usize, b: usize| {
         let a = geo.rect_at(n, b);
         let c = geo.rect_at(n, b + 1);
         (a.left() + c.left()) / 2.0
     };
     let xs: Vec<f32> = header_bars.iter().map(|b| bar_x(start, *b)).collect();
-    let (y0, _) = geo.span(start);
-    let (_, y1) = geo.span(end);
-    if !visible(look, y0, y1) {
-        return;
-    }
     let (left, right) = (xs[0], xs[xs.len() - 1]);
     let (top, bottom) = (y0 - 2.0, y1 + 2.0);
     let frame = Rect::from_min_max(Pos2::new(left - 4.0, top), Pos2::new(right + 4.0, bottom));
@@ -346,6 +355,10 @@ pub fn overlays(
         }
         let n = d.lines.partition_point(|l| l.range.end < link.range.start);
         if n >= d.lines.len() || !shown(n) {
+            continue;
+        }
+        let (y0, y1) = geo.span(n);
+        if !visible(look, y0, y1) {
             continue;
         }
         let at = link.range.end.saturating_sub(dest.len() + 3);

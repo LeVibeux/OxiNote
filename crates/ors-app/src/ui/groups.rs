@@ -162,7 +162,8 @@ fn draw_group(
                 .layout(UiLayout::left_to_right(Align::Min)),
         );
         bar.set_clip_rect(bar_rect.intersect(ui.clip_rect()));
-        tab_bar(&mut bar, state, &group, g, focused, actions);
+        let rightmost = is_rightmost(&state.ws.layout.root, g);
+        tab_bar(&mut bar, state, &group, g, focused, rightmost, actions);
     }
     ui.painter().line_segment(
         [bar_rect.left_bottom(), bar_rect.right_bottom()],
@@ -204,13 +205,16 @@ fn tab_bar(
     group: &crate::workspace::Group,
     g: GroupId,
     focused: bool,
+    rightmost: bool,
     actions: &mut Vec<Action>,
 ) {
     let pal = Palette::of(ui.ctx());
     let bar_w = ui.available_width();
+    // Room for the "+" button and, on the rightmost group, the sidebar toggle.
+    let reserved = if rightmost { 64.0 } else { 34.0 };
     egui::ScrollArea::horizontal()
         .id_salt(("tabbar", g))
-        .max_width((bar_w - 34.0).max(40.0))
+        .max_width((bar_w - reserved).max(40.0))
         .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -281,10 +285,21 @@ fn tab_bar(
                     });
                     let (label, close) = inner.inner;
                     let tab_resp = inner.response.interact(Sense::click_and_drag());
-                    if label.clicked() || tab_resp.clicked() {
+                    // `tab_resp` is registered after the children and covers them, so
+                    // it receives the click on "×": route it back to the close button.
+                    let on_close = click_on_close(
+                        tab_resp.clicked(),
+                        tab_resp.interact_pointer_pos(),
+                        close.rect,
+                    );
+                    if (label.clicked() || tab_resp.clicked()) && !on_close {
                         actions.push(Action::Ws(WsAction::ActivateTab(*tab_id)));
                     }
-                    if label.middle_clicked() || tab_resp.middle_clicked() || close.clicked() {
+                    if label.middle_clicked()
+                        || tab_resp.middle_clicked()
+                        || close.clicked()
+                        || on_close
+                    {
                         actions.push(Action::Ws(WsAction::CloseTab(*tab_id)));
                     }
                     let payload = TabDrag {
@@ -337,12 +352,41 @@ fn tab_bar(
     if resp.on_hover_text("New note (Ctrl+N)").clicked() {
         actions.push(Action::Exec(Command::NewNote));
     }
+    let toggle_w = if rightmost { 30.0 } else { 0.0 };
     let rest = ui.allocate_response(
-        Vec2::new(ui.available_width().max(1.0), TAB_BAR_H),
+        Vec2::new((ui.available_width() - toggle_w).max(1.0), TAB_BAR_H),
         Sense::hover(),
     );
     if let Some(d) = rest.dnd_release_payload::<TabDrag>() {
         actions.push(Action::Ws(WsAction::MoveTabTo(d.id, g, None)));
+    }
+    if rightmost {
+        let open = state.settings.right_open;
+        let tip = if open {
+            "Collapse right sidebar"
+        } else {
+            "Expand right sidebar"
+        };
+        if super::explorer_ui::icon_button(ui, icons::SIDEBAR, tip, false).clicked() {
+            actions.push(Action::Exec(Command::ToggleRightSidebar));
+        }
+    }
+}
+
+/// A click on a tab counts as a click on its "×" when the pointer was inside
+/// the close button's rectangle.
+fn click_on_close(clicked: bool, pos: Option<egui::Pos2>, close: egui::Rect) -> bool {
+    clicked && pos.is_some_and(|p| close.contains(p))
+}
+
+/// Whether group `g` touches the right edge of the workspace.
+fn is_rightmost(node: &Node, g: GroupId) -> bool {
+    match node {
+        Node::Leaf(id) => *id == g,
+        Node::Split {
+            row: true, second, ..
+        } => is_rightmost(second, g),
+        Node::Split { first, second, .. } => is_rightmost(first, g) || is_rightmost(second, g),
     }
 }
 
@@ -494,4 +538,39 @@ pub fn drag_preview(ctx: &egui::Context) {
                     ui.label(RichText::new(label).color(pal.strong));
                 });
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use eframe::egui::{Rect, pos2};
+
+    #[test]
+    fn click_on_close_needs_a_click_inside_the_button() {
+        let close = Rect::from_min_max(pos2(10.0, 10.0), pos2(20.0, 20.0));
+        assert!(click_on_close(true, Some(pos2(15.0, 15.0)), close));
+        assert!(!click_on_close(true, Some(pos2(40.0, 15.0)), close));
+        assert!(!click_on_close(true, None, close));
+        assert!(!click_on_close(false, Some(pos2(15.0, 15.0)), close));
+    }
+
+    #[test]
+    fn rightmost_group_follows_the_split_tree() {
+        let leaf = |g| Box::new(Node::Leaf(g));
+        let row = Node::Split {
+            row: true,
+            ratio: 0.5,
+            first: leaf(1),
+            second: Box::new(Node::Split {
+                row: false,
+                ratio: 0.5,
+                first: leaf(2),
+                second: leaf(3),
+            }),
+        };
+        assert!(!is_rightmost(&row, 1));
+        assert!(is_rightmost(&row, 2));
+        assert!(is_rightmost(&row, 3));
+        assert!(is_rightmost(&Node::Leaf(1), 1));
+    }
 }

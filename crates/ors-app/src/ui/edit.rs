@@ -1253,9 +1253,7 @@ fn edit_body(
         let shapes = edit_blocks::backdrop(&geo, &active, &fold_hidden, &look);
         ui.painter().set(backdrop_idx, egui::Shape::Vec(shapes));
         edit_blocks::overlays(ui, &geo, &active, &fold_hidden, &look);
-        paint_widgets(
-            ui, &decor, text_ref, &output, &active, &hidden, &pal, tab_id,
-        )
+        paint_widgets(ui, &geo, &output, &active, &hidden, &pal, tab_id)
     } else {
         None
     };
@@ -1496,8 +1494,7 @@ fn byte_at(galley: &egui::Galley, origin: Pos2, text: &str, pos: Pos2) -> usize 
 #[allow(clippy::too_many_arguments)]
 fn paint_widgets(
     ui: &mut egui::Ui,
-    decor: &Decor,
-    text: &str,
+    geo: &edit_blocks::Geo,
     output: &egui::text_edit::TextEditOutput,
     active: &Range<usize>,
     hidden: &HashSet<usize>,
@@ -1505,34 +1502,26 @@ fn paint_widgets(
     tab_id: TabId,
 ) -> Option<usize> {
     let mut toggled = None;
-    let galley = &output.galley;
-    let off = output.galley_pos.to_vec2();
+    let decor = geo.decor;
+    let off = geo.off;
     let clip = ui.clip_rect();
     let width = output.response.rect.width();
-    // Char index of the start of every line.
-    let mut line_chars = Vec::with_capacity(decor.lines.len());
-    let mut acc = 0;
-    for l in &decor.lines {
-        line_chars.push(acc);
-        acc += text.get(l.range.clone()).map_or(0, |s| s.chars().count()) + 1;
-    }
-    let rect_at = |n: usize, byte: usize| -> Rect {
-        let start = decor.lines[n].range.start;
-        let c = line_chars[n] + text.get(start..byte).map_or(0, |s| s.chars().count());
-        galley.pos_from_cursor(CCursor::new(c)).translate(off)
+    let rect_at = |n: usize, byte: usize| geo.rect_at(n, byte);
+    // Cheap check first: exact glyph positions walk the whole galley.
+    let on_screen = |n: usize| {
+        let (y0, y1) = geo.span(n);
+        y1 >= clip.top() - 200.0 && y0 <= clip.bottom() + 200.0
     };
     let painter = ui.painter().clone();
     for (n, l) in decor.lines.iter().enumerate() {
-        if active.contains(&n) || hidden.contains(&n) {
+        if l.kind != LineKind::Rule || active.contains(&n) || hidden.contains(&n) {
             continue;
         }
-        let top = rect_at(n, l.range.start);
-        if top.bottom() < clip.top() - 200.0 || top.top() > clip.bottom() + 200.0 {
+        if !on_screen(n) {
             continue;
         }
-        let bottom = rect_at(n, l.range.end);
-        let (y0, y1) = (top.top(), bottom.bottom());
-        if l.kind == LineKind::Rule {
+        let (y0, y1) = geo.span(n);
+        {
             let y = (y0 + y1) / 2.0;
             painter.line_segment(
                 [Pos2::new(off.x, y), Pos2::new(off.x + width, y)],
@@ -1546,6 +1535,7 @@ fn paint_widgets(
             continue;
         }
         match w {
+            Widget::Bullet { .. } | Widget::Checkbox { .. } if !on_screen(*n) => {}
             Widget::Bullet { at } => {
                 let a = rect_at(*n, *at);
                 let b = rect_at(*n, *at + 1);

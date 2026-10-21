@@ -229,9 +229,76 @@ fn draw_blocks(
     blocks: &[Block],
     actions: &mut Vec<Action>,
 ) {
+    if cx.interactive {
+        return draw_blocks_culled(ui, cx, caches, blocks, actions);
+    }
     for b in blocks {
         draw_block(ui, cx, caches, b, actions);
     }
+}
+
+/// Identity of a laid-out note: blocks (address, count), width, font size.
+type HeightsKey = (usize, usize, u32, u32);
+
+/// Top-level blocks of the note, with the ones far outside the viewport
+/// replaced by empty space of the height they had when last drawn: laying
+/// out every block of a long note on each frame made scrolling slow.
+fn draw_blocks_culled(
+    ui: &mut egui::Ui,
+    cx: &Ctx<'_>,
+    caches: &mut UiCaches,
+    blocks: &[Block],
+    actions: &mut Vec<Action>,
+) {
+    let id = egui::Id::unique(("reading-heights", cx.path.as_str()));
+    // Same blocks (the Rc'd parse), width and font size: heights still hold.
+    let key: HeightsKey = (
+        blocks.as_ptr() as usize,
+        blocks.len(),
+        ui.available_width().to_bits(),
+        cx.size.to_bits(),
+    );
+    let known: Option<Vec<f32>> = ui
+        .data(|d| d.get_temp::<(HeightsKey, Vec<f32>)>(id))
+        .filter(|(k, h)| *k == key && h.len() == blocks.len())
+        .map(|(_, h)| h);
+    let clip = ui.clip_rect();
+    let (lo, hi) = (clip.top() - clip.height(), clip.bottom() + clip.height());
+    let mut heights = Vec::with_capacity(blocks.len());
+    for (i, b) in blocks.iter().enumerate() {
+        let top = ui.cursor().top();
+        let (headings, tasks, callouts) = counts(std::slice::from_ref(b));
+        let first = cx.heading_n.get();
+        let wanted = cx
+            .scroll_heading
+            .is_some_and(|h| (first..first + headings).contains(&h));
+        if let Some(h) = known.as_ref().and_then(|k| k.get(i).copied())
+            && !wanted
+            && (top + h < lo || top > hi)
+        {
+            // Skipped headings sit at the top of their block, close enough
+            // for the heading navigator and the current-line tracking.
+            for n in first..first + headings {
+                if let Some(slot) = cx.heading_ys.borrow_mut().get_mut(n) {
+                    *slot = Some(top);
+                }
+                if top <= cx.clip_top + 24.0
+                    && let Some(l) = cx.prepared.heading_lines.get(n)
+                {
+                    cx.current_line.set(Some(*l));
+                }
+            }
+            cx.heading_n.set(first + headings);
+            cx.task_n.set(cx.task_n.get() + tasks);
+            cx.callout_n.set(cx.callout_n.get() + callouts);
+            ui.add_space(h);
+            heights.push(h);
+            continue;
+        }
+        draw_block(ui, cx, caches, b, actions);
+        heights.push(ui.cursor().top() - top);
+    }
+    ui.data_mut(|d| d.insert_temp(id, (key, heights)));
 }
 
 fn draw_block(

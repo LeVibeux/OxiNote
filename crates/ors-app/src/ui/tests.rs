@@ -758,3 +758,138 @@ fn the_column_keeps_a_right_margin_when_the_navigator_is_active() {
     );
     assert!(800.0 - on >= editor::NAV_RESERVE);
 }
+
+fn wheel(dy: f32) -> Vec<Event> {
+    vec![
+        Event::PointerMoved(pos2(700.0, 400.0)),
+        Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, dy),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Trackpad,
+            modifiers: Modifiers::NONE,
+        },
+    ]
+}
+
+#[test]
+fn long_note_scrolls_in_reading_and_live_preview() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    let path = open_empty(&mut app, &ctx);
+    let text: String = (0..150)
+        .map(|i| format!("## Part {i}\n\nSome text with a [[link]].\n\n- [ ] task {i}\n\n"))
+        .collect();
+    state(&mut app).buffers.get_mut(&path).expect("buffer").text = text;
+    state(&mut app).buffer_edited(&path);
+    for mode in [DisplayMode::Reading, DisplayMode::LivePreview] {
+        state(&mut app).set_display_mode(mode);
+        frames(&mut app, &ctx, 3);
+        for _ in 0..80 {
+            frame(&mut app, &ctx, wheel(-300.0));
+        }
+    }
+    // Reading view: far-off blocks are skipped, the heading tracking still
+    // follows the scroll.
+    state(&mut app).set_display_mode(DisplayMode::Reading);
+    frames(&mut app, &ctx, 3);
+    for _ in 0..40 {
+        frame(&mut app, &ctx, wheel(-300.0));
+    }
+    let line = state(&mut app)
+        .views
+        .current_line
+        .as_ref()
+        .map_or(0, |(_, l)| *l);
+    assert!(line > 100, "current line {line}");
+}
+
+/// One frame like `frame`, returning the texts drawn with their rectangles.
+fn frame_texts(app: &mut ObsiApp, ctx: &egui::Context, events: Vec<Event>) -> Vec<(String, Rect)> {
+    fn collect(shape: &egui::epaint::Shape, out: &mut Vec<(String, Rect)>) {
+        match shape {
+            egui::epaint::Shape::Text(t) => {
+                out.push((t.galley.text().to_string(), t.visual_bounding_rect()));
+            }
+            egui::epaint::Shape::Vec(v) => v.iter().for_each(|s| collect(s, out)),
+            _ => {}
+        }
+    }
+    let input = RawInput {
+        screen_rect: Some(Rect::from_min_size(
+            pos2(0.0, 0.0),
+            egui::vec2(1280.0, 800.0),
+        )),
+        events,
+        ..RawInput::default()
+    };
+    let out = ctx.run_ui(input, |ui| app.workspace(ui));
+    let mut texts = Vec::new();
+    for s in &out.shapes {
+        collect(&s.shape, &mut texts);
+    }
+    texts
+}
+
+fn click_pos(app: &mut ObsiApp, ctx: &egui::Context, pos: egui::Pos2) {
+    let button = |pressed| Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    frame(app, ctx, vec![Event::PointerMoved(pos)]);
+    frame(app, ctx, vec![button(true)]);
+    frame(app, ctx, vec![button(false)]);
+    frames(app, ctx, 2);
+}
+
+#[test]
+fn clicking_the_cross_of_a_tab_closes_only_that_tab() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    let a = NotePath::new("Orpheline.md").expect("path");
+    let b = NotePath::new("Rust notes.md").expect("path");
+    state(&mut app).open(&a, OpenIn::CurrentTab);
+    state(&mut app).open(&b, OpenIn::NewTab);
+    frames(&mut app, &ctx, 3);
+    let before = state(&mut app).tabs.len();
+    assert!(before >= 2);
+    let active_before = state(&mut app).active_note().cloned();
+    let crosses: Vec<Rect> = frame_texts(&mut app, &ctx, Vec::new())
+        .into_iter()
+        .filter(|(t, _)| t == "×")
+        .map(|(_, r)| r)
+        .collect();
+    assert_eq!(crosses.len(), before);
+    // Close the first (inactive) tab: it must not be activated on the way.
+    click_pos(&mut app, &ctx, crosses[0].center());
+    let s = state(&mut app);
+    assert_eq!(s.tabs.len(), before - 1);
+    assert!(s.tabs.iter().all(|t| t.note().is_none_or(|n| n.path != a)));
+    assert_eq!(s.active_note().cloned(), active_before);
+}
+
+#[test]
+fn right_sidebar_collapses_from_its_header_and_reopens_from_the_tab_bar() {
+    let ctx = egui::Context::default();
+    let mut app = app();
+    state(&mut app).settings.right_open = true;
+    let note = NotePath::new("Orpheline.md").expect("path");
+    state(&mut app).open(&note, OpenIn::CurrentTab);
+    frames(&mut app, &ctx, 3);
+    // The right-most sidebar glyph is the collapse button of the sidebar.
+    let toggle = |texts: Vec<(String, Rect)>| {
+        texts
+            .into_iter()
+            .filter(|(t, r)| t == icons::SIDEBAR && r.center().x > 100.0)
+            .map(|(_, r)| r)
+            .max_by(|a, b| a.center().x.total_cmp(&b.center().x))
+    };
+    let r = toggle(frame_texts(&mut app, &ctx, Vec::new())).expect("collapse button");
+    click_pos(&mut app, &ctx, r.center());
+    assert!(!state(&mut app).settings.right_open);
+    let r = toggle(frame_texts(&mut app, &ctx, Vec::new())).expect("tab bar toggle");
+    click_pos(&mut app, &ctx, r.center());
+    assert!(state(&mut app).settings.right_open);
+}
