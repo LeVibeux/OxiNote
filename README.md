@@ -14,6 +14,10 @@ Téléchargez l'archive de votre système dans les
 [Releases](https://github.com/LeVibeux/ObsiRust/releases) (macOS Apple Silicon et
 Intel, Windows, Linux). Elle contient l'application et le CLI `obsirust`.
 
+Sur Ubuntu / Debian, installez le paquet `.deb` (double-clic, ou
+`sudo apt install ./obsirust_<version>_amd64.deb`) : ObsiRust apparaît dans le menu
+des applications et `obsirust` est disponible dans le terminal.
+
 Pour publier une version : onglet *Actions* → *Release* → *Run workflow*, avec la
 version (`v0.1.0`), ou poussez un tag `vX.Y.Z`. Le workflow
 `.github/workflows/release.yml` compile et publie la release.

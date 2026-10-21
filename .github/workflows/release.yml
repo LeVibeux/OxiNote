@@ -27,7 +27,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # Oldest supported Ubuntu LTS: binaries built against an older glibc
+          # also run on newer releases.
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin
@@ -61,8 +63,9 @@ jobs:
           cp assets/linux/obsirust.desktop "$name/"
           cp assets/logo/obsirust-icon-256.png "$name/obsirust.png"
           cp README.md "$name/"
-          tar czf "$name.tar.gz" "$name"
-          echo "ASSET=$name.tar.gz" >> "$GITHUB_ENV"
+          mkdir -p dist
+          tar czf "dist/$name.tar.gz" "$name"
+          scripts/build-deb.sh target/${{ matrix.target }}/release "$TAG" dist
 
       - name: Package (macOS)
         if: runner.os == 'macOS'
@@ -105,8 +108,8 @@ jobs:
           # Ad-hoc signature: required for Apple Silicon binaries to launch.
           codesign --force --deep --sign - "$app"
           codesign --force --sign - "$name/obsirust"
-          ditto -c -k --keepParent "$name" "$name.zip"
-          echo "ASSET=$name.zip" >> "$GITHUB_ENV"
+          mkdir -p dist
+          ditto -c -k --keepParent "$name" "dist/$name.zip"
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
@@ -118,13 +121,13 @@ jobs:
           Copy-Item "target/${{ matrix.target }}/release/obsirust.exe" $name
           Copy-Item "assets/logo/obsirust.ico" $name
           Copy-Item "README.md" $name
-          Compress-Archive -Path $name -DestinationPath "$name.zip"
-          "ASSET=$name.zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          Compress-Archive -Path $name -DestinationPath "dist/$name.zip"
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: ${{ env.ASSET }}
+          path: dist/*
           if-no-files-found: error
 
   release:
@@ -155,7 +158,8 @@ jobs:
             | macOS (Apple Silicon : M1, M2, M3…) | `…-aarch64-apple-darwin.zip` | `ObsiRust.app` |
             | macOS (Intel) | `…-x86_64-apple-darwin.zip` | `ObsiRust.app` |
             | Windows | `…-x86_64-pc-windows-msvc.zip` | `obsirust-app.exe` |
-            | Linux | `…-x86_64-unknown-linux-gnu.tar.gz` | `./obsirust-app` |
+            | Ubuntu / Debian | `obsirust_…_amd64.deb` | double-clic, ou `sudo apt install ./obsirust_…_amd64.deb`, puis ObsiRust dans le menu des applications |
+            | Autres Linux | `…-x86_64-unknown-linux-gnu.tar.gz` | `./obsirust-app` |
 
             Chaque archive contient aussi le CLI `obsirust` (`obsirust --help`).
 
