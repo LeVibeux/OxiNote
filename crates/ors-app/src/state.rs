@@ -30,6 +30,8 @@ pub enum ViewMode {
 pub enum OpenIn {
     CurrentTab,
     NewTab,
+    /// New tab in a new group to the right of the focused one.
+    SplitRight,
 }
 
 /// A note (or attachment) tab with its own navigation history.
@@ -204,6 +206,8 @@ pub struct AppState {
     /// Set by the "Add property" command: the Properties panel opens its
     /// name field on next frame.
     pub add_property_requested: bool,
+    /// Workspace area: tab groups, bookmarks, plugins, explorer, settings.
+    pub ws: crate::workbench::Workbench,
 }
 
 impl AppState {
@@ -241,6 +245,7 @@ impl AppState {
             focus_search: false,
             editor: crate::editor::EditorState::default(),
             add_property_requested: false,
+            ws: crate::workbench::Workbench::default(),
             vault: {
                 if let Err(e) = vault.start_watching() {
                     eprintln!("file watcher unavailable: {e}");
@@ -249,6 +254,7 @@ impl AppState {
             },
         };
         state.refresh_files();
+        state.load_workbench();
         state
     }
 
@@ -307,11 +313,13 @@ impl AppState {
         self.active_tab().and_then(Tab::note).map(|n| &n.path)
     }
 
-    fn push_tab(&mut self, content: TabContent) -> usize {
+    pub(crate) fn push_tab(&mut self, content: TabContent) -> usize {
         let id = self.next_tab_id;
         self.next_tab_id += 1;
         let at = self.active.map_or(self.tabs.len(), |i| i + 1);
         self.tabs.insert(at, Tab { id, content });
+        let focused = self.ws.layout.focused;
+        self.ws.layout.insert_tab(focused, id, None);
         self.set_active(at);
         at
     }
@@ -325,6 +333,8 @@ impl AppState {
             self.save_all();
         }
         self.active = Some(i);
+        let id = self.tabs[i].id;
+        self.ws.layout.activate(id);
     }
 
     pub fn close_tab(&mut self, i: usize) {
@@ -335,12 +345,8 @@ impl AppState {
         if let TabContent::Note(n) = &tab.content {
             self.release_buffer(&n.path);
         }
-        self.active = match self.active {
-            _ if self.tabs.is_empty() => None,
-            Some(a) if a > i => Some(a - 1),
-            Some(a) if a == i => Some(i.min(self.tabs.len() - 1)),
-            other => other,
-        };
+        self.ws.layout.remove_tab(tab.id);
+        self.sync_active_from_layout();
     }
 
     pub fn close_tab_by_id(&mut self, id: TabId) {
@@ -349,6 +355,7 @@ impl AppState {
         }
     }
 
+    #[cfg(test)]
     pub fn move_tab(&mut self, from: usize, to: usize) {
         if from >= self.tabs.len() || to >= self.tabs.len() || from == to {
             return;
@@ -360,12 +367,14 @@ impl AppState {
     }
 
     pub fn cycle_tab(&mut self, delta: isize) {
-        let n = self.tabs.len() as isize;
-        if n == 0 {
-            return;
+        if let Some(i) = self
+            .ws
+            .layout
+            .cycle(delta)
+            .and_then(|id| self.tab_index(id))
+        {
+            self.set_active(i);
         }
-        let cur = self.active.unwrap_or(0) as isize;
-        self.set_active((cur + delta).rem_euclid(n) as usize);
     }
 
     /// Save the buffer and drop it if no tab shows it anymore.
@@ -381,7 +390,7 @@ impl AppState {
         }
     }
 
-    fn ensure_buffer(&mut self, path: &NotePath) {
+    pub(crate) fn ensure_buffer(&mut self, path: &NotePath) {
         if !path.is_markdown() || self.buffers.contains_key(path) {
             return;
         }
@@ -406,11 +415,23 @@ impl AppState {
         self.recent_files.retain(|p| p != path);
         self.recent_files.insert(0, path.clone());
         self.recent_files.truncate(30);
+        if open_in == OpenIn::SplitRight {
+            let g = self.ws.layout.focused;
+            self.ws.layout.split(g, crate::workspace::SplitDir::Right);
+        }
+        let pinned = self
+            .active_tab()
+            .is_some_and(|t| self.ws.layout.is_pinned(t.id));
         let current_is_note = self.active_tab().is_some_and(|t| t.note().is_some());
-        if open_in == OpenIn::NewTab || !current_is_note {
+        if open_in != OpenIn::CurrentTab || pinned || !current_is_note {
+            let mode = if self.settings.default_reading_view {
+                ViewMode::Reading
+            } else {
+                ViewMode::Source
+            };
             self.push_tab(TabContent::Note(NoteTab {
                 path: path.clone(),
-                mode: ViewMode::Source,
+                mode,
                 back: Vec::new(),
                 forward: Vec::new(),
                 pending_line: None,
@@ -689,7 +710,11 @@ impl AppState {
     }
 
     /// Point tabs, buffers and history at a renamed file.
-    fn retarget(&mut self, from: &NotePath, to: &NotePath) {
+    pub(crate) fn retarget(&mut self, from: &NotePath, to: &NotePath) {
+        if self.ws.bookmarks.has_file(from.as_str()) {
+            self.ws.bookmarks.rename_file(from.as_str(), to.as_str());
+            self.bookmarks_changed();
+        }
         for t in &mut self.tabs {
             if let Some(n) = t.note_mut() {
                 if &n.path == from {
@@ -944,7 +969,7 @@ impl AppState {
         self.bump();
     }
 
-    fn reload_clean_buffer(&mut self, path: &NotePath) {
+    pub(crate) fn reload_clean_buffer(&mut self, path: &NotePath) {
         let Some(b) = self.buffers.get(path) else {
             return;
         };
@@ -1141,7 +1166,9 @@ impl AppState {
                 }
             }
             Command::CloseTab => {
-                if let Some(i) = self.active {
+                if let Some(i) = self.active
+                    && !self.ws.layout.is_pinned(self.tabs[i].id)
+                {
                     self.close_tab(i);
                 }
             }
@@ -1151,6 +1178,7 @@ impl AppState {
             Command::NavigateForward => self.navigate(true),
             Command::ToggleLeftSidebar => self.settings.left_open = !self.settings.left_open,
             Command::ToggleRightSidebar => self.settings.right_open = !self.settings.right_open,
+            Command::Ws(c) => self.exec_ws(c),
             Command::ReloadVault => self.reload_vault(),
             Command::ToggleTheme => {
                 self.settings.theme = match self.settings.theme {

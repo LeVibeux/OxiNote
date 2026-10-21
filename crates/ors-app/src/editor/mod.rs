@@ -82,8 +82,6 @@ pub struct EditorState {
     /// Tabs whose editing mode differs from the default
     /// (`Settings::live_preview`).
     pub toggled_tabs: HashSet<TabId>,
-    /// Line-number gutter; `None` = read `showLineNumber` from app.json.
-    pub line_numbers: Option<bool>,
 }
 
 impl EditorState {
@@ -168,8 +166,8 @@ impl AppState {
                 }
             }
             Command::ToggleLineNumbers => {
-                let on = self.show_line_numbers();
-                self.editor.line_numbers = Some(!on);
+                self.settings.show_line_numbers = !self.settings.show_line_numbers;
+                self.save_vault_settings();
             }
             c if is_editor_command(c) => {
                 let editing = self
@@ -182,22 +180,6 @@ impl AppState {
             }
             _ => {}
         }
-    }
-
-    /// Line numbers on? (`showLineNumber` in `.obsidian/app.json` unless
-    /// toggled by the user.)
-    pub fn show_line_numbers(&mut self) -> bool {
-        if let Some(v) = self.editor.line_numbers {
-            return v;
-        }
-        let v = self
-            .vault
-            .app_config()
-            .ok()
-            .and_then(|c| c.extra.get("showLineNumber").and_then(|v| v.as_bool()))
-            .unwrap_or(false);
-        self.editor.line_numbers = Some(v);
-        v
     }
 
     /// `useMarkdownLinks` from `.obsidian/app.json`.
