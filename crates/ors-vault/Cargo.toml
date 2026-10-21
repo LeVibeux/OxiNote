@@ -1,0 +1,20 @@
+[package]
+name = "ors-vault"
+description = "On-disk Obsidian vault: files, config, watcher, daily notes, templates"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ors-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+notify-debouncer-full = "0.7"
+trash = "5"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

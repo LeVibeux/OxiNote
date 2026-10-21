@@ -1,0 +1,29 @@
+[package]
+name = "ors-app"
+description = "ObsiRust desktop application"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "obsirust-app"
+path = "src/main.rs"
+
+[dependencies]
+ors-core.workspace = true
+ors-markdown.workspace = true
+ors-vault.workspace = true
+ors-index.workspace = true
+ors-graph.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+eframe = { version = "0.37", features = ["persistence", "glow"] }
+egui_extras = { version = "0.37", features = ["image"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp"] }
+rfd = "0.17"
+pulldown-cmark = { version = "0.13", default-features = false }
+directories = "6"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[lints]
+workspace = true
