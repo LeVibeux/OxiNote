@@ -7,6 +7,8 @@ mod edit;
 mod edit_deco;
 mod editor;
 mod explorer_ui;
+#[cfg(test)]
+mod git_tests;
 mod git_ui;
 mod graph;
 mod groups;
@@ -336,6 +338,10 @@ impl ObsiApp {
                 "daily" => P::DailyNotes,
                 "templates" => P::Templates,
                 "git" => P::GitBackup,
+                "git-ignore" => {
+                    state.git.scroll_gitignore = true;
+                    P::GitBackup
+                }
                 "about" => P::About,
                 _ => P::Editor,
             };

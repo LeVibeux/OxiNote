@@ -189,6 +189,9 @@ pub fn settings_page(ui: &mut egui::Ui, state: &mut AppState) {
     });
 
     heading(ui, ".gitignore");
+    if std::mem::take(&mut state.git.scroll_gitignore) {
+        ui.scroll_to_cursor(Some(egui::Align::TOP));
+    }
     state.git_load_gitignore();
     for p in Preset::ALL {
         let mut on = preset_active(&state.git.gitignore_text, p);
@@ -198,13 +201,21 @@ pub fn settings_page(ui: &mut egui::Ui, state: &mut AppState) {
         }
     }
     ui.add_space(6.0);
-    ui.add(
-        egui::TextEdit::multiline(&mut state.git.gitignore_text)
-            .font(egui::TextStyle::Monospace)
-            .desired_rows(9)
-            .desired_width(f32::INFINITY)
-            .hint_text("Un motif par ligne, comme dans un .gitignore"),
-    );
+    egui::Frame::new()
+        .fill(pal.code_bg)
+        .stroke(egui::Stroke::new(1.0, pal.border))
+        .corner_radius(4)
+        .inner_margin(6)
+        .show(ui, |ui| {
+            ui.add(
+                egui::TextEdit::multiline(&mut state.git.gitignore_text)
+                    .font(egui::TextStyle::Monospace)
+                    .frame(egui::Frame::NONE)
+                    .desired_rows(8)
+                    .desired_width(f32::INFINITY)
+                    .hint_text("Un motif par ligne, comme dans un .gitignore"),
+            );
+        });
     let dirty = state.git.gitignore_text != state.git.gitignore_saved;
     ui.horizontal(|ui| {
         if ui
@@ -282,8 +293,9 @@ pub fn status_item(ui: &mut egui::Ui, state: &AppState, actions: &mut Vec<Action
     };
     let inner = ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
-        ui.label(icons::text(icon, 13.0).color(color));
+        // The parent lays out right to left: the text goes first.
         ui.label(RichText::new(text).size(12.0).color(color));
+        ui.label(icons::text(icon, 13.0).color(color));
     });
     let tip = match g.last_commit {
         Some(t) => format!(

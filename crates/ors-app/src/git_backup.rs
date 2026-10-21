@@ -158,12 +158,9 @@ fn run(dir: &Path, cfg: &[String], args: &[&str], stdin: Option<Vec<u8>>) -> Res
     if args.first() != Some(&"check-ignore") {
         cmd.arg("--literal-pathspecs");
     }
-    cmd.arg("-C").arg(dir).args([
-        "-c",
-        "commit.gpgsign=false",
-        "-c",
-        "core.quotepath=false",
-    ]);
+    cmd.arg("-C")
+        .arg(dir)
+        .args(["-c", "commit.gpgsign=false", "-c", "core.quotepath=false"]);
     for c in cfg {
         cmd.arg("-c").arg(c);
     }
@@ -681,8 +678,7 @@ fn parse_log(text: &str, prefix: &str, rel: &str) -> Vec<Commit> {
         };
         // `M\tpath` or `R100\told\tnew`: the last field is the path then.
         let path = lines
-            .filter(|l| !l.trim().is_empty())
-            .next_back()
+            .rfind(|l| !l.trim().is_empty())
             .and_then(|l| l.split('\t').next_back())
             .map(|p| p.strip_prefix(prefix).unwrap_or(p).to_string())
             .unwrap_or_else(|| rel.to_string());
@@ -911,6 +907,7 @@ pub struct GitService {
     /// Message of the last error toast (not repeated).
     pub last_error: Option<String>,
     pub init_error: Option<String>,
+    settings_before_init: Option<GitSettings>,
     /// Paths git ignores (files, and folders ending with `/`).
     pub ignored: HashSet<String>,
     ignore_asked: Option<(usize, usize, u64)>,
@@ -923,6 +920,8 @@ pub struct GitService {
     /// What the file on disk holds (to tell unsaved edits).
     pub gitignore_saved: String,
     pub gitignore_loaded: bool,
+    /// Scroll the settings page to the `.gitignore` section (screenshots).
+    pub scroll_gitignore: bool,
     pub history: History,
     pub confirm: Option<GitConfirm>,
     next_status: f64,
@@ -947,6 +946,7 @@ impl Default for GitService {
             backup_running: false,
             last_error: None,
             init_error: None,
+            settings_before_init: None,
             ignored: HashSet::new(),
             ignore_asked: None,
             ignore_running: false,
@@ -956,6 +956,7 @@ impl Default for GitService {
             gitignore_text: String::new(),
             gitignore_saved: String::new(),
             gitignore_loaded: false,
+            scroll_gitignore: false,
             history: History::default(),
             confirm: None,
             next_status: 0.0,
@@ -1149,6 +1150,12 @@ impl AppState {
         }
         self.git.init_error = None;
         self.save_all();
+        // Enabled by the init; written before the first commit so that the
+        // commit contains it.
+        self.git.settings_before_init = Some(self.git.settings.clone());
+        self.git.settings.auto_backup = true;
+        self.git.settings.backup_on_exit = true;
+        self.git_save_settings();
         self.git.spawn(move || Msg::Initialized(init_repo(&root)));
     }
 
@@ -1202,9 +1209,8 @@ impl AppState {
             Msg::Initialized(res) => match res {
                 Ok(info) => {
                     self.git.repo = Some(info);
-                    self.git.settings.auto_backup = true;
-                    self.git.settings.backup_on_exit = true;
-                    self.git_save_settings();
+                    self.git.settings_before_init = None;
+                    self.git.next_backup = now + self.git.settings.interval_secs();
                     self.git.last_commit = self.git_root().and_then(|r| last_commit_time(&r));
                     self.git.changes = Some(0);
                     self.git.gitignore_loaded = false;
@@ -1213,6 +1219,10 @@ impl AppState {
                     self.info("Dépôt Git initialisé : premier commit créé.");
                 }
                 Err(e) => {
+                    if let Some(prev) = self.git.settings_before_init.take() {
+                        self.git.settings = prev;
+                        self.git_save_settings();
+                    }
                     self.git.init_error = Some(e.to_string());
                     self.git_report(e);
                 }
