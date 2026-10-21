@@ -24,7 +24,18 @@ pub fn readable_column<R>(
     readable: bool,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let avail = ui.available_width();
+    readable_column_with(ui, readable, 0.0, add)
+}
+
+/// Like [`readable_column`], keeping `left_extra` points free on the left
+/// of the text (line numbers, fold arrows).
+pub fn readable_column_with<R>(
+    ui: &mut egui::Ui,
+    readable: bool,
+    left_extra: f32,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let avail = ui.available_width() - left_extra;
     let width = if readable {
         (avail - 32.0).min(READABLE_WIDTH)
     } else {
@@ -33,7 +44,7 @@ pub fn readable_column<R>(
     .max(100.0);
     let pad = ((avail - width) / 2.0).max(0.0);
     ui.horizontal_top(|ui| {
-        ui.add_space(pad);
+        ui.add_space(pad + left_extra);
         ui.vertical(|ui| {
             ui.set_width(width);
             add(ui)
@@ -59,15 +70,39 @@ pub fn editor_font(size: f32, mono: bool) -> FontId {
 }
 
 /// Build the highlighted layout job for the source editor.
-pub fn layout_job(text: &str, size: f32, mono: bool, pal: &Palette) -> LayoutJob {
+pub fn layout_job(text: &str, size: f32, mono: bool, styled: bool, pal: &Palette) -> LayoutJob {
     let mut job = LayoutJob::default();
     for (range, style) in highlight(text) {
-        job.append(&text[range], 0.0, format_for(&style, size, mono, pal));
+        job.append(
+            &text[range],
+            0.0,
+            format_for(&style, size, mono, styled, pal),
+        );
     }
     job
 }
 
-pub(super) fn format_for(s: &Style, size: f32, mono: bool, pal: &Palette) -> TextFormat {
+/// Font for text that is `bold` and/or `italic`: the real Inter faces when
+/// `styled` (families installed) and the editor is proportional.
+pub fn styled_font(size: f32, mono: bool, styled: bool, bold: bool, italic: bool) -> FontId {
+    if mono || !styled || !(bold || italic) {
+        return editor_font(size, mono);
+    }
+    let name = match (bold, italic) {
+        (true, true) => super::theme::BOLD_ITALIC_FAMILY,
+        (true, false) => super::theme::BOLD_FAMILY,
+        _ => super::theme::ITALIC_FAMILY,
+    };
+    FontId::new(size, FontFamily::Name(name.into()))
+}
+
+pub(super) fn format_for(
+    s: &Style,
+    size: f32,
+    mono: bool,
+    styled: bool,
+    pal: &Palette,
+) -> TextFormat {
     let scale = match s.heading {
         1 => 1.6,
         2 => 1.4,
@@ -77,14 +112,20 @@ pub(super) fn format_for(s: &Style, size: f32, mono: bool, pal: &Palette) -> Tex
         _ => 1.0,
     };
     let mut fmt = TextFormat {
-        font_id: editor_font(size * scale, mono),
+        font_id: styled_font(
+            size * scale,
+            mono,
+            styled,
+            s.heading > 0 || s.bold,
+            s.italic,
+        ),
         color: pal.text,
         ..TextFormat::default()
     };
     if s.heading > 0 || s.bold {
         fmt.color = pal.strong;
     }
-    if s.italic {
+    if s.italic && (mono || !styled) {
         fmt.italics = true;
     }
     if s.strike {
@@ -174,7 +215,7 @@ mod tests {
     #[test]
     fn layout_job_covers_text() {
         let text = "# Title\nsome **bold** [[link]] #tag";
-        let job = layout_job(text, 14.0, false, &Palette::dark());
+        let job = layout_job(text, 14.0, false, false, &Palette::dark());
         assert_eq!(job.text, text);
         assert!(job.sections.len() > 4);
     }

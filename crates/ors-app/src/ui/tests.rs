@@ -437,3 +437,88 @@ fn renaming_a_tag_from_the_dialog_updates_notes_and_buffers() {
     assert!(s.buffers[&idees].text.contains("pensée"));
     assert!(!s.buffers[&idees].is_dirty(), "clean buffer reloaded");
 }
+
+// ---------------------------------------------------------------------------
+// Editor: block completion, folding, inline images, line numbers
+// ---------------------------------------------------------------------------
+
+fn open_with_text(app: &mut ObsiApp, ctx: &egui::Context, name: &str, text: &str) -> NotePath {
+    let path = NotePath::new(name).expect("path");
+    state(app).open_at_line(&path, 0, OpenIn::CurrentTab);
+    if let Some(b) = state(app).buffers.get_mut(&path) {
+        b.text = text.to_string();
+    }
+    frames(app, ctx, 4);
+    path
+}
+
+#[test]
+fn block_completion_lists_the_blocks_of_the_note() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("blocks");
+    let path = open_with_text(
+        &mut app,
+        &ctx,
+        "Blocs.md",
+        "Un paragraphe important ^imp\n\n",
+    );
+    frame(&mut app, &ctx, vec![Event::Text("[[#^".into())]);
+    frames(&mut app, &ctx, 1);
+    let c = app.caches.completion.as_ref().expect("completion");
+    assert_eq!(c.items.len(), 1, "{:?}", c.items);
+    assert_eq!(c.items[0].insert, "imp");
+    assert!(c.items[0].label.contains("Un paragraphe important"));
+    frame(&mut app, &ctx, vec![key(Key::Enter, Modifiers::NONE)]);
+    frames(&mut app, &ctx, 1);
+    assert!(text_of(&mut app, &path).starts_with("[[#^imp]]"));
+}
+
+#[test]
+fn fold_all_hides_sections_and_unfold_all_restores_them() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("folds");
+    let text = "# Titre\nligne un\nligne deux\n## Sous\nsuite\n";
+    let path = open_with_text(&mut app, &ctx, "Plis.md", text);
+    state(&mut app).editor.pending.push(Command::FoldAll);
+    frames(&mut app, &ctx, 3);
+    let tab = state(&mut app).active_tab().expect("tab").id;
+    assert_eq!(
+        state(&mut app).editor.folds.get(&tab).map(Vec::len),
+        Some(2)
+    );
+    // The text itself is untouched.
+    assert_eq!(text_of(&mut app, &path), text);
+    state(&mut app).editor.pending.push(Command::UnfoldAll);
+    frames(&mut app, &ctx, 2);
+    assert!(!state(&mut app).editor.folds.contains_key(&tab));
+}
+
+#[test]
+fn images_and_line_numbers_render_without_touching_the_text() {
+    let ctx = egui::Context::default();
+    let (mut app, dir) = real_app("images");
+    let mut png = Vec::new();
+    image::RgbaImage::new(40, 20)
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .expect("png");
+    std::fs::write(dir.0.join("pic.png"), &png).expect("write png");
+    {
+        let s = state(&mut app);
+        s.index = real_index(&*s.vault);
+        s.settings.show_line_numbers = true;
+    }
+    let text = "avant\n![[pic.png|30]]\naprès\n";
+    let path = open_with_text(&mut app, &ctx, "Img.md", text);
+    let placed = app
+        .caches
+        .embeds
+        .placed
+        .values()
+        .next()
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(placed.len(), 1, "image not laid out");
+    assert_eq!((placed[0].line, placed[0].size.x), (1, 30.0));
+    assert_eq!(placed[0].size.y, 15.0);
+    assert_eq!(text_of(&mut app, &path), text);
+}

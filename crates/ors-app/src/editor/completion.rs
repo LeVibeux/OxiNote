@@ -58,7 +58,16 @@ pub fn detect(text: &str, at: usize) -> Option<Context> {
                         (Kind::Heading { note }, at - after.len())
                     }
                 }
-                None => (Kind::Link, at - inner.len()),
+                None => match inner.rfind('^') {
+                    // `[[Note^`: block of a note, without the `#`.
+                    Some(c) if !inner[..c].is_empty() => (
+                        Kind::Block {
+                            note: inner[..c].to_string(),
+                        },
+                        at - (inner.len() - c - 1),
+                    ),
+                    _ => (Kind::Link, at - inner.len()),
+                },
             };
             return Some(Context {
                 kind,
@@ -97,6 +106,96 @@ pub fn detect(text: &str, at: usize) -> Option<Context> {
         end: at,
         query: query.to_string(),
     })
+}
+
+/// A block id of a note with the text of its block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockItem {
+    pub id: String,
+    pub excerpt: String,
+}
+
+/// Text of the block carrying `^id` on `line` (0-based): its paragraph
+/// without the id and the list / quote / heading markers, shortened.
+pub fn block_excerpt(text: &str, line: usize, id: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let Some(&at) = lines.get(line) else {
+        return String::new();
+    };
+    let clean = |l: &str| -> String {
+        let l = l.replace(&format!("^{id}"), "");
+        let mut t = l.trim();
+        loop {
+            let before = t;
+            t = t.trim_start_matches(['>', '#']).trim_start();
+            for m in ["- [ ] ", "- [x] ", "- ", "* ", "+ "] {
+                if let Some(r) = t.strip_prefix(m) {
+                    t = r.trim_start();
+                }
+            }
+            if t == before {
+                break;
+            }
+        }
+        t.to_string()
+    };
+    let mut first = line;
+    let mut body = clean(at);
+    // The id alone on its line (after a table, a list...) belongs to the
+    // paragraph above.
+    if body.is_empty() {
+        while first > 0 && lines[first - 1].trim().is_empty() {
+            first -= 1;
+        }
+        if first == 0 {
+            return String::new();
+        }
+        first -= 1;
+        body = clean(lines[first]);
+    }
+    // Earlier lines of the same paragraph (at most 2 more).
+    let mut parts = vec![body];
+    for k in 1..=2 {
+        let Some(i) = first.checked_sub(k) else { break };
+        let l = lines[i];
+        if l.trim().is_empty()
+            || l.trim_start().starts_with(['#', '>', '-', '*', '+'])
+            || l.starts_with("---")
+        {
+            break;
+        }
+        parts.insert(0, clean(l));
+    }
+    let joined = parts.join(" ");
+    let mut out: String = joined.chars().take(80).collect();
+    if joined.chars().count() > 80 {
+        out.push('…');
+    }
+    out
+}
+
+/// Blocks of a note matching `query` (id or text, case-insensitive).
+/// `blocks` are `(id, 0-based line)`.
+pub fn block_items(
+    text: &str,
+    blocks: &[(String, usize)],
+    query: &str,
+    limit: usize,
+) -> Vec<BlockItem> {
+    let q = query.trim().trim_start_matches('^').to_lowercase();
+    blocks
+        .iter()
+        .map(|(id, line)| BlockItem {
+            id: id.clone(),
+            excerpt: block_excerpt(text, *line, id),
+        })
+        .filter(|b| {
+            q.is_empty()
+                || b.id.to_lowercase().contains(&q)
+                || b.excerpt.to_lowercase().contains(&q)
+        })
+        .take(limit)
+        .collect()
 }
 
 /// Heading text as usable in a link subpath (Obsidian drops `#|^[]`).
@@ -203,6 +302,54 @@ mod tests {
         );
         assert_eq!(c.query, "gra");
         assert!(c.embed);
+    }
+
+    #[test]
+    fn detects_blocks_without_hash() {
+        let c = ctx("[[Idées^gr").unwrap();
+        assert_eq!(
+            c.kind,
+            Kind::Block {
+                note: "Idées".into()
+            }
+        );
+        assert_eq!(c.query, "gr");
+        assert_eq!(c.start, "[[Idées^".len());
+        // `^` first (no note) stays a plain link query.
+        assert_eq!(ctx("[[^x").unwrap().kind, Kind::Link);
+        let mut t = "voir [[Idées#^gr".to_string();
+        let c = ctx(&t).unwrap();
+        let s = accept_in_link(&mut t, &c, "graphe");
+        assert_eq!(t, "voir [[Idées#^graphe]]");
+        assert_eq!(s, Sel::caret(t.len()));
+    }
+
+    #[test]
+    fn block_candidates() {
+        let t = "# T\n\nPremière ligne\nsuite du bloc ^abc\n\n- [ ] une tâche ^t-1\n\n> citation\n\n^seul\n\nlibre\n";
+        let blocks = vec![
+            ("abc".to_string(), 3),
+            ("t-1".to_string(), 5),
+            ("seul".to_string(), 9),
+        ];
+        let all = block_items(t, &blocks, "", 10);
+        assert_eq!(all.len(), 3);
+        assert_eq!(all[0].excerpt, "Première ligne suite du bloc");
+        assert_eq!(all[1].excerpt, "une tâche");
+        // Id alone on its line: the paragraph above.
+        assert_eq!(all[2].excerpt, "citation");
+        // Filter on the id or on the text.
+        let f = block_items(t, &blocks, "T-1", 10);
+        assert_eq!(f.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(), ["t-1"]);
+        let f = block_items(t, &blocks, "^citat", 10);
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].id, "seul");
+        assert_eq!(block_items(t, &blocks, "", 2).len(), 2);
+        // Long blocks are shortened.
+        let long = format!("{} ^l", "mot ".repeat(40));
+        let e = block_excerpt(&long, 0, "l");
+        assert!(e.ends_with('…') && e.chars().count() == 81);
+        assert_eq!(block_excerpt("x", 5, "l"), "");
     }
 
     #[test]

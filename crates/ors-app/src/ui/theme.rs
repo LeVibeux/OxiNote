@@ -1,6 +1,6 @@
 //! Obsidian-like colours (purple accent) for both themes.
 
-use eframe::egui::{self, Color32, Context, Stroke, Theme};
+use eframe::egui::{self, Color32, Context, FontFamily as FontFamilyName, Stroke, Theme};
 
 use crate::settings::ThemeChoice;
 
@@ -124,7 +124,22 @@ fn accent_override(ctx: &Context) -> Option<[u8; 3]> {
 }
 
 const INTER: &[u8] = include_bytes!("../../assets/fonts/Inter-Regular.otf");
+const INTER_BOLD: &[u8] = include_bytes!("../../assets/fonts/Inter-Bold.otf");
+const INTER_ITALIC: &[u8] = include_bytes!("../../assets/fonts/Inter-Italic.otf");
+const INTER_BOLD_ITALIC: &[u8] = include_bytes!("../../assets/fonts/Inter-BoldItalic.otf");
 const PHOSPHOR: &[u8] = include_bytes!("../../assets/fonts/Phosphor.ttf");
+
+/// Names of the extra proportional families holding the Inter faces.
+pub const BOLD_FAMILY: &str = "bold";
+pub const ITALIC_FAMILY: &str = "italic";
+pub const BOLD_ITALIC_FAMILY: &str = "bold-italic";
+
+/// Are the bold / italic families installed in this context? (Contexts of
+/// headless tests do not install fonts, and egui panics on unknown families.)
+pub fn has_styled_fonts(ctx: &Context) -> bool {
+    let want = FontFamilyName::Name(BOLD_ITALIC_FAMILY.into());
+    ctx.fonts(|f| f.families().contains(&want))
+}
 
 /// Register Inter (primary proportional font when `inter`) and the
 /// Phosphor icon font (its own `icons` family).
@@ -138,8 +153,34 @@ pub fn install_fonts(ctx: &Context, inter: bool) {
     fonts
         .font_data
         .insert("Phosphor".into(), Arc::new(FontData::from_static(PHOSPHOR)));
+    for (name, bytes) in [
+        ("Inter-Bold", INTER_BOLD),
+        ("Inter-Italic", INTER_ITALIC),
+        ("Inter-BoldItalic", INTER_BOLD_ITALIC),
+    ] {
+        fonts
+            .font_data
+            .insert(name.into(), Arc::new(FontData::from_static(bytes)));
+    }
+    // Fallbacks (symbols, emoji) of the default proportional family.
+    let fallback = fonts
+        .families
+        .get(&FontFamily::Proportional)
+        .cloned()
+        .unwrap_or_default();
     if inter && let Some(list) = fonts.families.get_mut(&FontFamily::Proportional) {
         list.insert(0, "Inter".into());
+    }
+    // Real bold / italic faces for the editor (`bold`, `italic`,
+    // `bold-italic` families), see `ui::editor::styled_font`.
+    for (family, face) in [
+        (BOLD_FAMILY, "Inter-Bold"),
+        (ITALIC_FAMILY, "Inter-Italic"),
+        (BOLD_ITALIC_FAMILY, "Inter-BoldItalic"),
+    ] {
+        let mut list = vec![face.to_string()];
+        list.extend(fallback.iter().filter(|f| *f != "Inter").cloned());
+        fonts.families.insert(FontFamily::Name(family.into()), list);
     }
     fonts
         .families

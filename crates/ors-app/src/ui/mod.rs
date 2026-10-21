@@ -4,6 +4,7 @@
 
 mod dialogs;
 mod edit;
+mod edit_deco;
 mod editor;
 mod explorer_ui;
 mod graph;
@@ -105,6 +106,7 @@ pub struct UiCaches {
     completion: Option<edit::CompletionUi>,
     find: Option<edit::FindUi>,
     explorer: explorer_ui::ExplorerCache,
+    embeds: edit_deco::EmbedCache,
 }
 
 impl UiCaches {
@@ -148,6 +150,8 @@ pub struct Startup {
     /// Split the workspace and open the next notes in the right group.
     pub split: bool,
     pub split_down: bool,
+    /// Fold every heading and list on opening (`--fold-all`, screenshots).
+    pub fold_all: bool,
 }
 
 pub struct ObsiApp {
@@ -282,6 +286,9 @@ impl ObsiApp {
             }
             if s.reading {
                 state.toggle_mode();
+            }
+            if s.fold_all {
+                state.editor.pending.push(Command::FoldAll);
             }
         }
         if let Some(p) = state.active_note().cloned() {

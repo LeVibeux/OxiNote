@@ -75,6 +75,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Cli, String> {
             "--settings" => s.settings = Some(value(&mut it, &a)?),
             "--split" => s.split = true,
             "--split-down" => s.split_down = true,
+            "--fold-all" => s.fold_all = true,
             "--switcher" => s.switcher = Some(value(&mut it, &a)?),
             "--search" => s.search = Some(value(&mut it, &a)?),
             "--theme" => {

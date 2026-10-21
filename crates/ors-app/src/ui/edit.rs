@@ -9,6 +9,7 @@
 //! transformations live in [`crate::editor`] and are unit-tested there.
 
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Range;
 use std::rc::Rc;
@@ -20,13 +21,15 @@ use eframe::egui::{
 };
 use ors_core::NotePath;
 
-use super::editor::{editor_font, format_for, layout_job, readable_column};
-use super::theme::Palette;
+use super::edit_deco;
+use super::editor::{editor_font, format_for, layout_job, readable_column_with};
+use super::theme::{Palette, has_styled_fonts};
 use super::{Action, UiCaches};
 use crate::backend::IndexBackend;
 use crate::commands::Command;
 use crate::editor::completion::{self, Context as CompCtx, Kind as CompKind};
 use crate::editor::find::{find_all, next_match, replace_all};
+use crate::editor::fold;
 use crate::editor::format as fmt;
 use crate::editor::live::{Conceal, Decor, LineInfo, LineKind, LinkTarget, Widget, decorate};
 use crate::editor::{Sel, byte_to_char, char_to_byte, line_of, run_command};
@@ -87,6 +90,26 @@ struct Params<'a> {
     /// Hide the raw YAML block (the Properties panel replaces it).
     hide_frontmatter: bool,
     resolves: &'a dyn Fn(&str) -> bool,
+    /// The bold / italic Inter families are installed.
+    styled: bool,
+    /// Lines hidden by folds.
+    hidden: &'a HashSet<usize>,
+    /// Lines replaced by an inline image: row height reserved for it.
+    images: &'a HashMap<usize, f32>,
+}
+
+/// Size of the font used for hidden markers.
+const HIDDEN_SIZE: f32 = 0.1;
+
+fn hidden_format() -> TextFormat {
+    TextFormat {
+        font_id: FontId::new(HIDDEN_SIZE, FontFamily::Proportional),
+        color: Color32::TRANSPARENT,
+        // The first glyph of a section is not affected; the following ones
+        // are pulled back so that long markers leave no gap.
+        extra_letter_spacing: -HIDDEN_SIZE,
+        ..TextFormat::default()
+    }
 }
 
 fn heading_scale(kind: &LineKind) -> f32 {
@@ -110,7 +133,7 @@ fn piece_format(
     p: &Params,
 ) -> TextFormat {
     let pal = &p.pal;
-    let mut f = format_for(style, p.size, p.mono, pal);
+    let mut f = format_for(style, p.size, p.mono, p.styled, pal);
     if concealed {
         match &line.kind {
             LineKind::Quote => f.color = pal.muted,
@@ -140,7 +163,8 @@ fn piece_format(
     }
     match conceal {
         Some(Conceal::Hide) => {
-            f.font_id = FontId::new(0.1, FontFamily::Proportional);
+            f.font_id = FontId::new(HIDDEN_SIZE, FontFamily::Proportional);
+            f.extra_letter_spacing = -HIDDEN_SIZE;
             f.color = Color32::TRANSPARENT;
             f.background = Color32::TRANSPARENT;
             f.strikethrough = Stroke::NONE;
@@ -195,11 +219,21 @@ fn build_job(
         if hide_fm && line.kind == LineKind::Frontmatter {
             let next = decor.lines.get(n + 1).map_or(text.len(), |l| l.range.start);
             if next > r.start {
-                let f = TextFormat {
-                    font_id: FontId::new(0.1, FontFamily::Proportional),
-                    color: Color32::TRANSPARENT,
-                    ..TextFormat::default()
-                };
+                pieces.push((r.start..next, hidden_format()));
+            }
+            continue;
+        }
+        // Lines of a folded block, and the image of an image-only line, take
+        // (almost) no room / a fixed row height.
+        let hidden_by_fold = p.hidden.contains(&n);
+        let image_h = (p.live && !p.active.contains(&n))
+            .then(|| p.images.get(&n).copied())
+            .flatten();
+        if hidden_by_fold || image_h.is_some() {
+            let next = decor.lines.get(n + 1).map_or(text.len(), |l| l.range.start);
+            if next > r.start {
+                let mut f = hidden_format();
+                f.line_height = image_h;
                 pieces.push((r.start..next, f));
             }
             continue;
@@ -293,7 +327,7 @@ fn build_job(
     }
     if cover != text.len() || job.text.len() != text.len() {
         // Safety net: the layout text must equal the buffer.
-        return layout_job(text, p.size, p.mono, &p.pal);
+        return layout_job(text, p.size, p.mono, p.styled, &p.pal);
     }
     job
 }
@@ -388,7 +422,42 @@ fn items_for(state: &AppState, text: &str, from: &NotePath, ctx: &CompCtx) -> Ve
                 })
                 .collect()
         }
-        CompKind::Block { .. } => Vec::new(),
+        CompKind::Block { note } => {
+            let target = if note.is_empty() {
+                Some(from.clone())
+            } else {
+                state.index.resolve(note, from)
+            };
+            let Some(target) = target else {
+                return Vec::new();
+            };
+            let (parsed, source) = if &target == from {
+                (state.parsed_with_text(from, text), text.to_string())
+            } else {
+                (
+                    state.parsed(&target),
+                    state.note_text(&target).unwrap_or_default(),
+                )
+            };
+            let blocks: Vec<(String, usize)> = parsed
+                .block_ids
+                .iter()
+                .map(|b| (b.id.clone(), b.line))
+                .collect();
+            completion::block_items(&source, &blocks, &ctx.query, 10)
+                .into_iter()
+                .map(|b| Item {
+                    label: if b.excerpt.is_empty() {
+                        format!("^{}", b.id)
+                    } else {
+                        format!("{}  ^{}", b.excerpt, b.id)
+                    },
+                    detail: format!("^{}", b.id),
+                    insert: b.id,
+                    target: None,
+                })
+                .collect()
+        }
         CompKind::Tag => state
             .index
             .tag_suggestions(&ctx.query, 10)
@@ -547,7 +616,17 @@ fn edit_body(
                 f.show_replace = cmd == Command::ReplaceInNote || f.show_replace;
                 caches.find = Some(f);
             }
-            Command::FoldAll | Command::UnfoldAll => {}
+            Command::FoldAll => {
+                let d = decorate(text);
+                let keys = fold::all_keys(text, &d.lines, &d.folds);
+                state.editor.folds.insert(tab_id, keys);
+                // Folded lines cannot hold the caret.
+                cur = Sel::caret(fold_safe_caret(text, &d, cur.start));
+                sel_changed = true;
+            }
+            Command::UnfoldAll => {
+                state.editor.folds.remove(&tab_id);
+            }
             c => {
                 if let Some(new) = run_command(c, text, cur) {
                     cur = new;
@@ -754,11 +833,31 @@ fn edit_body(
         .map(|f| (f.query.clone(), f.case, f.current));
     let generation = state.generation;
     let hide_frontmatter = crate::properties_model::frontmatter_hidden(&state.settings);
+    let styled = has_styled_fonts(&ctx);
+    let show_numbers = state.settings.show_line_numbers;
+    // A caret inside a folded block opens it.
+    if !active.is_empty()
+        && let Some(keys) = state.editor.folds.get(&tab_id).filter(|k| !k.is_empty())
+        && let Some((_, d)) = caches.decor.get(&tab_id)
+    {
+        let mut left = keys.clone();
+        for line in [active.start, active.end.saturating_sub(1)] {
+            left = fold::reveal_line(text, &d.lines, &d.folds, &left, line);
+        }
+        if left.len() != keys.len() {
+            state.editor.folds.insert(tab_id, left);
+        }
+    }
+    let fold_keys: Vec<fold::FoldKey> =
+        state.editor.folds.get(&tab_id).cloned().unwrap_or_default();
+    caches.embeds.sync(generation);
     let index: &dyn IndexBackend = &*state.index;
+    let vault: &dyn ors_core::VaultRead = &*state.vault;
     let from = path.clone();
     let resolves = |t: &str| index.resolve(t, &from).is_some();
     let decor_cache = &mut caches.decor;
     let job_cache = &mut caches.highlight;
+    let embed_cache = &mut caches.embeds;
     let active_for_layout = active.clone();
     let mut layouter = |ui: &egui::Ui, buf: &dyn egui::TextBuffer, wrap_width: f32| {
         let t = buf.as_str();
@@ -771,17 +870,44 @@ fn edit_body(
                 d
             }
         };
+        let hidden: HashSet<usize> = if fold_keys.is_empty() {
+            HashSet::new()
+        } else {
+            let idx = fold::folded_indices(t, &decor.lines, &decor.folds, &fold_keys);
+            fold::hidden_lines(&decor.folds, &idx)
+        };
+        let mut images: HashMap<usize, f32> = HashMap::new();
+        if live {
+            let placed = embed_cache.layout(
+                tab_id,
+                index,
+                vault,
+                &from,
+                &decor.images,
+                |l| active_for_layout.contains(&l) || hidden.contains(&l),
+                wrap_width,
+            );
+            for pl in placed {
+                images.insert(pl.line, edit_deco::image_row_height(pl.size.y));
+            }
+        } else {
+            embed_cache.placed.remove(&tab_id);
+        }
+        let mut image_key: Vec<(usize, u32)> =
+            images.iter().map(|(l, h)| (*l, h.to_bits())).collect();
+        image_key.sort_unstable();
         let key = hash_of(&(
-            th,
-            size.to_bits(),
-            mono,
-            pal.text,
-            live,
-            hide_frontmatter,
-            active_for_layout.start,
-            active_for_layout.end,
-            generation,
-            &find_params,
+            (
+                th,
+                size.to_bits(),
+                mono,
+                styled,
+                pal.text,
+                live,
+                hide_frontmatter,
+            ),
+            (active_for_layout.start, active_for_layout.end, generation),
+            (&find_params, &fold_keys, &image_key),
         ));
         let mut job = match job_cache.get(&tab_id) {
             Some((k, job)) if *k == key => job.clone(),
@@ -798,6 +924,9 @@ fn edit_body(
                     active: active_for_layout.clone(),
                     hide_frontmatter,
                     resolves: &resolves,
+                    styled,
+                    hidden: &hidden,
+                    images: &images,
                 };
                 let cur = find_params.as_ref().map_or(usize::MAX, |p| p.2);
                 let job = build_job(t, &decor, &params, &marks, cur);
@@ -809,7 +938,14 @@ fn edit_body(
         ui.fonts_mut(|f| f.layout_job(job))
     };
 
-    let output = readable_column(ui, readable, |ui| {
+    let line_count = text.matches('\n').count() + 1;
+    let left_extra = edit_deco::ARROW_GUTTER
+        + if show_numbers {
+            edit_deco::number_gutter_width(line_count, size)
+        } else {
+            0.0
+        };
+    let output = readable_column_with(ui, readable, left_extra, |ui| {
         ui.add_space(8.0);
         egui::TextEdit::multiline(text)
             .id(id)
@@ -858,12 +994,68 @@ fn edit_body(
         }
     }
 
+    let folded_idx = fold::folded_indices(text_ref, &decor.lines, &decor.folds, &fold_keys);
+    let hidden = fold::hidden_lines(&decor.folds, &folded_idx);
     // ---- Live Preview widgets ------------------------------------------
     let toggle_line = if live {
-        paint_widgets(ui, &decor, text_ref, &output, &active, &pal, tab_id)
+        paint_widgets(
+            ui, &decor, text_ref, &output, &active, &hidden, &pal, tab_id,
+        )
     } else {
         None
     };
+
+    // ---- gutter, folds and inline images --------------------------------
+    {
+        let rows = edit_deco::line_rows(&galley);
+        if show_numbers {
+            let caret_line = output.cursor_range.map(|r| {
+                line_of(
+                    text_ref,
+                    char_to_byte(text_ref, usize::from(r.primary.index)),
+                )
+            });
+            edit_deco::paint_line_numbers(ui, &rows, origin, &hidden, caret_line, size, &pal);
+        }
+        if let Some(start) = edit_deco::fold_controls(
+            ui,
+            tab_id,
+            &decor.folds,
+            &folded_idx,
+            &hidden,
+            &rows,
+            origin,
+            output.response.rect.width(),
+            &pal,
+        ) {
+            let keys = fold::toggle(text_ref, &decor.lines, &decor.folds, &fold_keys, start);
+            state.editor.folds.insert(tab_id, keys);
+            ctx.request_repaint();
+        }
+        let placed = caches
+            .embeds
+            .placed
+            .get(&tab_id)
+            .cloned()
+            .unwrap_or_default();
+        let clip = ui.clip_rect();
+        for pl in placed {
+            if active.contains(&pl.line) || hidden.contains(&pl.line) {
+                continue;
+            }
+            let Some(r) = rows.get(pl.line) else { continue };
+            let top = origin.y + r.top + edit_deco::IMAGE_PAD;
+            let rect = Rect::from_min_size(Pos2::new(origin.x, top), pl.size);
+            if rect.bottom() < clip.top() || rect.top() > clip.bottom() {
+                continue;
+            }
+            if let Some(bytes) = caches.image_bytes(state, &pl.path) {
+                egui::Image::from_bytes(format!("bytes://{}", pl.path.as_str()), bytes)
+                    .corner_radius(4)
+                    .paint_at(ui, rect);
+            }
+        }
+    }
 
     // ---- ctrl+click on links ---------------------------------------------
     let mods = ui.input(|i| i.modifiers);
@@ -1002,6 +1194,19 @@ fn edit_body(
     edited
 }
 
+/// Start of the outermost header line hiding the caret (all blocks folded).
+fn fold_safe_caret(text: &str, d: &Decor, at: usize) -> usize {
+    let mut line = line_of(text, at).min(d.lines.len().saturating_sub(1));
+    for f in &d.folds {
+        if f.start < line && line <= f.end {
+            line = f.start;
+        }
+    }
+    d.lines
+        .get(line)
+        .map_or(at, |l| l.range.start.min(at.max(l.range.start)))
+}
+
 /// Byte offset under screen position `pos`.
 fn byte_at(galley: &egui::Galley, origin: Pos2, text: &str, pos: Pos2) -> usize {
     let c = galley.cursor_from_pos(pos - origin);
@@ -1011,12 +1216,14 @@ fn byte_at(galley: &egui::Galley, origin: Pos2, text: &str, pos: Pos2) -> usize 
 /// Paint bullets, checkboxes, rules, quote bars and callout tints over the
 /// blank glyphs of lines that do not hold the caret. Returns the line of a
 /// checkbox that was clicked.
+#[allow(clippy::too_many_arguments)]
 fn paint_widgets(
     ui: &mut egui::Ui,
     decor: &Decor,
     text: &str,
     output: &egui::text_edit::TextEditOutput,
     active: &Range<usize>,
+    hidden: &HashSet<usize>,
     pal: &Palette,
     tab_id: TabId,
 ) -> Option<usize> {
@@ -1039,7 +1246,7 @@ fn paint_widgets(
     };
     let painter = ui.painter().clone();
     for (n, l) in decor.lines.iter().enumerate() {
-        if active.contains(&n) {
+        if active.contains(&n) || hidden.contains(&n) {
             continue;
         }
         let top = rect_at(n, l.range.start);
@@ -1080,7 +1287,7 @@ fn paint_widgets(
         }
     }
     for (w, n) in &decor.widgets {
-        if active.contains(n) {
+        if active.contains(n) || hidden.contains(n) {
             continue;
         }
         match w {
@@ -1307,6 +1514,10 @@ mod tests {
         assert_eq!(decode_target("100%"), "100%");
     }
 
+    static NO_LINES: std::sync::LazyLock<HashSet<usize>> = std::sync::LazyLock::new(HashSet::new);
+    static NO_IMAGES: std::sync::LazyLock<HashMap<usize, f32>> =
+        std::sync::LazyLock::new(HashMap::new);
+
     fn params<'a>(active: Range<usize>, resolves: &'a dyn Fn(&str) -> bool) -> Params<'a> {
         Params {
             size: 15.0,
@@ -1316,6 +1527,9 @@ mod tests {
             active,
             hide_frontmatter: false,
             resolves,
+            styled: false,
+            hidden: &NO_LINES,
+            images: &NO_IMAGES,
         }
     }
 
