@@ -210,6 +210,10 @@ pub struct AppState {
     pub add_property_requested: bool,
     /// Workspace area: tab groups, bookmarks, plugins, explorer, settings.
     pub ws: crate::workbench::Workbench,
+    /// Page / zoom of the PDF tabs.
+    pub pdf_views: HashMap<TabId, crate::pdf::PdfViewState>,
+    /// Local Git backup of the vault (see `git_backup`).
+    pub git: crate::git_backup::GitService,
 }
 
 impl AppState {
@@ -249,6 +253,8 @@ impl AppState {
             editor: crate::editor::EditorState::default(),
             add_property_requested: false,
             ws: crate::workbench::Workbench::default(),
+            pdf_views: HashMap::new(),
+            git: crate::git_backup::GitService::default(),
             vault: {
                 if let Err(e) = vault.start_watching() {
                     eprintln!("file watcher unavailable: {e}");
@@ -258,6 +264,7 @@ impl AppState {
         };
         state.refresh_files();
         state.load_workbench();
+        state.git_load_settings();
         state
     }
 
@@ -345,6 +352,7 @@ impl AppState {
             return;
         }
         let tab = self.tabs.remove(i);
+        self.pdf_views.remove(&tab.id);
         if let TabContent::Note(n) = &tab.content {
             self.release_buffer(&n.path);
         }
@@ -489,7 +497,11 @@ impl AppState {
     }
 
     pub fn toggle_mode(&mut self) {
-        if let Some(tab) = self.active_tab_mut().and_then(Tab::note_mut) {
+        if let Some(tab) = self
+            .active_tab_mut()
+            .and_then(Tab::note_mut)
+            .filter(|n| n.path.is_markdown())
+        {
             tab.mode = match tab.mode {
                 ViewMode::Source => ViewMode::Reading,
                 ViewMode::Reading => ViewMode::Source,
@@ -552,6 +564,7 @@ impl AppState {
             self.save(&p);
         }
         self.toasts.retain(|t| now - t.created < 5.0);
+        self.git_tick();
     }
 
     /// Seconds until the next autosave is due (for scheduling a repaint).
@@ -1232,6 +1245,7 @@ impl AppState {
     /// Called before the app exits.
     pub fn shutdown(&mut self) {
         self.save_all();
+        self.git_backup_on_exit();
         self.save_workspace();
     }
 }

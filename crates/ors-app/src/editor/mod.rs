@@ -6,11 +6,13 @@
 //! UI converts to/from egui's char indices with [`char_to_byte`] and
 //! [`byte_to_char`].
 
+pub mod blocks;
 pub mod completion;
 pub mod embeds;
 pub mod find;
 pub mod fold;
 pub mod format;
+pub mod heading_nav;
 pub mod live;
 
 use std::collections::HashSet;
@@ -86,6 +88,8 @@ pub struct EditorState {
     pub toggled_tabs: HashSet<TabId>,
     /// Folded headings / list items per tab.
     pub folds: std::collections::HashMap<TabId, Vec<fold::FoldKey>>,
+    /// (tab, note) pairs whose `[!type]-` callouts were already folded on opening.
+    pub callout_seeded: HashSet<(TabId, ors_core::NotePath)>,
 }
 
 impl EditorState {
@@ -99,6 +103,34 @@ impl EditorState {
     /// Live Preview for `tab` given the user setting.
     pub fn live(&self, tab: TabId, mode: crate::settings::EditingMode) -> bool {
         self.is_live(tab, mode == crate::settings::EditingMode::LivePreview)
+    }
+}
+
+/// The three ways Obsidian shows a note.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisplayMode {
+    LivePreview,
+    Source,
+    Reading,
+}
+
+impl DisplayMode {
+    /// Name shown in the status bar.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::LivePreview => "Live Preview",
+            Self::Source => "Source mode",
+            Self::Reading => "Reading view",
+        }
+    }
+}
+
+/// Combine the tab's view mode (editing / reading) and its Live Preview flag.
+pub fn display_mode(view: crate::state::ViewMode, live: bool) -> DisplayMode {
+    match (view, live) {
+        (crate::state::ViewMode::Reading, _) => DisplayMode::Reading,
+        (_, true) => DisplayMode::LivePreview,
+        (_, false) => DisplayMode::Source,
     }
 }
 
@@ -156,18 +188,59 @@ pub fn run_command(cmd: Command, text: &mut String, sel: Sel) -> Option<Sel> {
 }
 
 impl AppState {
+    /// Display mode of the active note tab.
+    pub fn display_mode(&self) -> Option<DisplayMode> {
+        let t = self.active_tab()?;
+        let n = t.note()?;
+        // Modes only exist for Markdown notes (not PDFs, images, ...).
+        if !n.path.is_markdown() {
+            return None;
+        }
+        Some(display_mode(
+            n.mode,
+            self.editor.live(t.id, self.settings.default_editing_mode),
+        ))
+    }
+
+    /// Put the active note tab in `mode` (remembered per tab).
+    pub fn set_display_mode(&mut self, mode: DisplayMode) {
+        let default_live =
+            self.settings.default_editing_mode == crate::settings::EditingMode::LivePreview;
+        let Some(t) = self.active_tab_mut() else {
+            return;
+        };
+        let id = t.id;
+        let Some(n) = t.note_mut() else { return };
+        if !n.path.is_markdown() {
+            return;
+        }
+        match mode {
+            DisplayMode::Reading => n.mode = crate::state::ViewMode::Reading,
+            DisplayMode::LivePreview | DisplayMode::Source => {
+                n.mode = crate::state::ViewMode::Source;
+                if (mode == DisplayMode::LivePreview) == default_live {
+                    self.editor.toggled_tabs.remove(&id);
+                } else {
+                    self.editor.toggled_tabs.insert(id);
+                }
+            }
+        }
+    }
+
     /// Handle an editor command from the palette/shortcuts.
     pub fn editor_command(&mut self, cmd: Command) {
         match cmd {
-            Command::ToggleLivePreview => {
-                if let Some(id) = self
-                    .active_tab()
-                    .filter(|t| t.note().is_some())
-                    .map(|t| t.id)
-                    && !self.editor.toggled_tabs.remove(&id)
-                {
-                    self.editor.toggled_tabs.insert(id);
-                }
+            Command::ToggleLivePreview => match self.display_mode() {
+                Some(DisplayMode::LivePreview) => self.set_display_mode(DisplayMode::Source),
+                Some(_) => self.set_display_mode(DisplayMode::LivePreview),
+                None => {}
+            },
+            Command::CycleHeadingNavigator => {
+                self.settings.heading_navigator = self.settings.heading_navigator.next();
+                self.info(format!(
+                    "Heading navigator: {}",
+                    self.settings.heading_navigator.label()
+                ));
             }
             Command::ToggleLineNumbers => {
                 self.settings.show_line_numbers = !self.settings.show_line_numbers;

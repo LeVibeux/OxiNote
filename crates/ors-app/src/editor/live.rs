@@ -7,6 +7,9 @@
 
 use std::ops::Range;
 
+use super::blocks::{
+    BlockKind, BlockSpan, Guide, bars, find_blocks, footnote_refs, list_guides, math_spans,
+};
 use super::embeds::{ImageRef, image_line};
 use super::fold::{FoldRange, fold_ranges};
 use super::format::{ListKind, parse_prefix};
@@ -92,6 +95,16 @@ pub struct Decor {
     pub images: Vec<(usize, ImageRef)>,
     /// Foldable headings and list items.
     pub folds: Vec<FoldRange>,
+    /// Code blocks and tables.
+    pub blocks: Vec<BlockSpan>,
+    /// Inline maths ranges.
+    pub math: Vec<Range<usize>>,
+    /// Footnote reference ranges (`[^1]`).
+    pub footnotes: Vec<Range<usize>>,
+    /// Indentation guides of nested list items.
+    pub guides: Vec<Guide>,
+    /// Nesting depth of list item lines `(line, depth)`.
+    pub depths: Vec<(usize, usize)>,
 }
 
 impl Decor {
@@ -192,9 +205,53 @@ pub fn decorate(text: &str) -> Decor {
         d.lines.push(info);
         off += raw.len();
     }
+    d.blocks = find_blocks(text, &d.lines);
+    for bl in &d.blocks {
+        if !matches!(bl.kind, BlockKind::Table { .. }) {
+            continue;
+        }
+        for n in bl.start..=bl.end {
+            if n == bl.start + 1 {
+                continue;
+            }
+            let r = d.lines[n].range.clone();
+            for b in bars(&text[r.clone()], r.start) {
+                d.conceals.push((b..b + 1, Conceal::Blank, n));
+            }
+        }
+    }
+    for (n, l) in d.lines.iter().enumerate() {
+        if matches!(
+            l.kind,
+            LineKind::Frontmatter | LineKind::Code | LineKind::CodeFence
+        ) || d.images.iter().any(|(i, _)| *i == n)
+        {
+            continue;
+        }
+        let src = &text[l.range.clone()];
+        if highlight_is_comment(&spans, l.range.start) {
+            continue;
+        }
+        d.math.extend(math_spans(src, l.range.start));
+        for r in footnote_refs(src, l.range.start) {
+            d.conceals.push((r.start..r.start + 2, Conceal::Hide, n));
+            d.conceals.push((r.end - 1..r.end, Conceal::Hide, n));
+            d.footnotes.push(r);
+        }
+    }
+    let (guides, depths) = list_guides(text, &d.lines);
+    d.guides = guides;
+    d.depths = depths;
     d.conceals.sort_by_key(|(r, _, _)| r.start);
     d.folds = fold_ranges(text, &d.lines);
     d
+}
+
+fn highlight_is_comment(spans: &[(Range<usize>, Style)], at: usize) -> bool {
+    let i = spans.partition_point(|(r, _)| r.end <= at);
+    spans
+        .get(i)
+        .is_some_and(|(r, s)| r.start <= at && s.comment)
 }
 
 fn decorate_line(
@@ -227,6 +284,7 @@ fn decorate_line(
     } else if let Some(p) = parse_prefix(line) {
         match p.kind {
             ListKind::Quote => {
+                let mut header_done = false;
                 let rest = &line[p.marker_end..];
                 let header = rest
                     .strip_prefix("[!")
@@ -246,6 +304,23 @@ fn decorate_line(
                             header: true,
                         };
                         content = ls + end;
+                        // `> ` keeps its width (the icon is painted there);
+                        // `[!kind]` stays blank when there is no title (the
+                        // default title is painted over it).
+                        let no_title = line[end..].trim().is_empty();
+                        d.conceals
+                            .push((ls + p.indent..ls + p.marker_end, Conceal::Blank, n));
+                        let tag = (ls + p.marker_end, content);
+                        d.conceals.push((
+                            tag.0..tag.1,
+                            if no_title {
+                                Conceal::Blank
+                            } else {
+                                Conceal::Hide
+                            },
+                            n,
+                        ));
+                        header_done = true;
                     }
                     None => {
                         info.kind = match callout {
@@ -258,7 +333,9 @@ fn decorate_line(
                         content = ls + p.marker_end;
                     }
                 }
-                d.conceals.push((ls + p.indent..content, Conceal::Hide, n));
+                if !header_done {
+                    d.conceals.push((ls + p.indent..content, Conceal::Hide, n));
+                }
             }
             ListKind::Bullet(_) | ListKind::Ordered { .. } => {
                 content = ls + p.end;
@@ -361,7 +438,16 @@ fn decorate_line(
                 let dest = &rest[close + 2..close + end];
                 let end_b = r.start + close + end + 1;
                 d.conceals.push((r.start..r.start + 1, Conceal::Hide, n));
-                d.conceals.push((r.start + close..end_b, Conceal::Hide, n));
+                if dest.contains("://") {
+                    // `](` keeps its width: the external-link arrow is
+                    // painted there.
+                    d.conceals
+                        .push((r.start + close..r.start + close + 2, Conceal::Blank, n));
+                    d.conceals
+                        .push((r.start + close + 2..end_b, Conceal::Hide, n));
+                } else {
+                    d.conceals.push((r.start + close..end_b, Conceal::Hide, n));
+                }
                 d.links.push(LinkSpan {
                     range: r.start..end_b,
                     target: LinkTarget::Markdown(dest.to_string()),
@@ -411,7 +497,7 @@ mod tests {
     fn links_and_tags() {
         let t = "Voir [[Projets/ObsiRust|le projet]], [[Idées#Fonc]] et [doc](https://x.y) #tag/é";
         let d = decorate(t);
-        assert_eq!(shown(t, &d), "Voir le projet, Idées#Fonc et doc #tag/é");
+        assert_eq!(shown(t, &d), "Voir le projet, Idées#Fonc et doc·· #tag/é");
         assert_eq!(d.links.len(), 4);
         let at = t.find("le projet").unwrap();
         assert_eq!(
@@ -491,7 +577,7 @@ mod tests {
         assert_eq!(kinds[8], &LineKind::CodeFence);
         assert_eq!(kinds[9], &LineKind::Code);
         let s = shown(t, &d);
-        assert!(s.contains("\nAstuce\ncorps b\n"), "{s}");
+        assert!(s.contains("\n··Astuce\ncorps b\n"), "{s}");
         assert!(s.contains("let **x** = 1;"), "code untouched: {s}");
         assert!(s.contains("%% **c** %%"), "comments untouched: {s}");
         assert!(s.contains("\n···\n```rust"), "rule blanked: {s}");

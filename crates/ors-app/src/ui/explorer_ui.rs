@@ -169,6 +169,8 @@ pub fn explorer(
         bookmarked: &bookmarked_set,
         visible: &visible,
         n_selected: ex.selection.len(),
+        ignored: &state.git.ignored,
+        git: state.git.usable(),
     };
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
@@ -186,7 +188,7 @@ pub fn explorer(
             if rest.clicked() {
                 ex.selection.clear();
             }
-            rest.context_menu(|ui| folder_menu(ui, "", &mut ex, actions));
+            rest.context_menu(|ui| folder_menu(ui, "", None, &mut ex, actions));
         });
     caches.explorer.tree = tree;
     state.ws.explorer = ex;
@@ -199,6 +201,10 @@ struct Cx<'a> {
     bookmarked: &'a std::collections::HashSet<String>,
     visible: &'a [FsTarget],
     n_selected: usize,
+    /// Paths git ignores (folders end with `/`), dimmed in the tree.
+    ignored: &'a std::collections::HashSet<String>,
+    /// Git backup is active: the menus offer "Ignorer dans Git".
+    git: bool,
 }
 
 fn start_rename(ex: &mut ExplorerState, t: &FsTarget) {
@@ -281,6 +287,7 @@ fn folder_row(
     actions: &mut Vec<Action>,
 ) {
     let pal = cx.pal;
+    let git_ignored = cx.ignored.contains(&format!("{path}/"));
     let (rect, resp) = ui.allocate_exact_size(
         Vec2::new(ui.available_width(), ROW_H),
         Sense::click_and_drag(),
@@ -317,7 +324,7 @@ fn folder_row(
             Align2::LEFT_CENTER,
             name,
             FontId::proportional(13.5),
-            pal.text,
+            if git_ignored { pal.faint } else { pal.text },
         );
     }
     if ex.scroll_to.as_ref() == Some(target) {
@@ -355,7 +362,7 @@ fn folder_row(
         if ex.selection.len() > 1 && ex.is_selected(target) {
             multi_menu(ui, ex, actions);
         } else {
-            folder_menu(ui, path, ex, actions);
+            folder_menu(ui, path, cx.git.then_some(git_ignored), ex, actions);
         }
     });
 }
@@ -375,6 +382,7 @@ fn file_row(
         Sense::click_and_drag(),
     );
     let is_active = cx.active == Some(f);
+    let git_ignored = cx.ignored.contains(f.as_str());
     row_frame(ui, &resp, ex.is_selected(&target), is_active, false, &pal);
     let x = rect.left() + 4.0 + depth as f32 * INDENT + 16.0;
     let renaming = matches!(&ex.renaming, Some((t, _)) if *t == target);
@@ -390,7 +398,9 @@ fn file_row(
     if renaming {
         rename_edit(ui, rect, x, ex, &target, actions);
     } else {
-        let color = if is_active {
+        let color = if git_ignored {
+            pal.faint
+        } else if is_active {
             pal.strong
         } else if f.is_markdown() {
             pal.text
@@ -449,7 +459,7 @@ fn file_row(
         if ex.selection.len() > 1 && ex.is_selected(&target) {
             multi_menu(ui, ex, actions);
         } else {
-            file_menu(ui, f, bm, ex, actions);
+            file_menu(ui, f, bm, cx.git.then_some(git_ignored), ex, actions);
         }
     });
     let _ = cx.n_selected;
@@ -522,6 +532,7 @@ fn file_menu(
     ui: &mut egui::Ui,
     f: &NotePath,
     bookmarked: bool,
+    git: Option<bool>,
     ex: &mut ExplorerState,
     actions: &mut Vec<Action>,
 ) {
@@ -574,6 +585,7 @@ fn file_menu(
         ws(actions, WsAction::RevealSystem(target.clone()));
         ui.close();
     }
+    git_items(ui, f.as_str(), false, git, actions);
     ui.separator();
     if ui.button("Rename…").clicked() {
         start_rename(ex, &target);
@@ -588,7 +600,41 @@ fn file_menu(
     }
 }
 
-fn folder_menu(ui: &mut egui::Ui, folder: &str, ex: &mut ExplorerState, actions: &mut Vec<Action>) {
+/// "Ignorer dans Git" / "Ne plus ignorer" (`git`: `Some(is_ignored)` when
+/// the Git backup is active).
+fn git_items(
+    ui: &mut egui::Ui,
+    path: &str,
+    is_dir: bool,
+    git: Option<bool>,
+    actions: &mut Vec<Action>,
+) {
+    let Some(ignored) = git else {
+        return;
+    };
+    ui.separator();
+    let (label, make): (_, fn(String, bool) -> super::git_ui::GitAction) = if ignored {
+        ("Ne plus ignorer", |path, is_dir| {
+            super::git_ui::GitAction::Unignore { path, is_dir }
+        })
+    } else {
+        ("Ignorer dans Git", |path, is_dir| {
+            super::git_ui::GitAction::Ignore { path, is_dir }
+        })
+    };
+    if ui.button(label).clicked() {
+        actions.push(Action::Git(make(path.to_string(), is_dir)));
+        ui.close();
+    }
+}
+
+fn folder_menu(
+    ui: &mut egui::Ui,
+    folder: &str,
+    git: Option<bool>,
+    ex: &mut ExplorerState,
+    actions: &mut Vec<Action>,
+) {
     if ui.button("New note").clicked() {
         actions.push(Action::NewNoteIn(folder.to_string()));
         ui.close();
@@ -628,6 +674,7 @@ fn folder_menu(ui: &mut egui::Ui, folder: &str, ex: &mut ExplorerState, actions:
         ws(actions, WsAction::RevealSystem(target.clone()));
         ui.close();
     }
+    git_items(ui, folder, true, git, actions);
     ui.separator();
     if ui.button("Rename…").clicked() {
         start_rename(ex, &target);

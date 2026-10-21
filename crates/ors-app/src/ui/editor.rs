@@ -27,6 +27,23 @@ pub fn readable_column<R>(
     readable_column_with(ui, readable, 0.0, add)
 }
 
+/// Right margin (points) kept free for the heading navigator strip.
+pub const NAV_RESERVE: f32 = 32.0;
+
+thread_local! {
+    static NAV_RESERVE_NOW: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
+}
+
+/// Declare (for this frame's note view) whether the heading navigator is
+/// active, so columns keep its strip free.
+pub fn set_nav_reserve(active: bool) {
+    NAV_RESERVE_NOW.set(if active { NAV_RESERVE } else { 0.0 });
+}
+
+fn nav_reserve() -> f32 {
+    NAV_RESERVE_NOW.get()
+}
+
 /// Like [`readable_column`], keeping `left_extra` points free on the left
 /// of the text (line numbers, fold arrows).
 pub fn readable_column_with<R>(
@@ -35,7 +52,7 @@ pub fn readable_column_with<R>(
     left_extra: f32,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let avail = ui.available_width() - left_extra;
+    let avail = ui.available_width() - left_extra - nav_reserve();
     let width = if readable {
         (avail - 32.0).min(READABLE_WIDTH)
     } else {
@@ -76,7 +93,7 @@ pub fn layout_job(text: &str, size: f32, mono: bool, styled: bool, pal: &Palette
         job.append(
             &text[range],
             0.0,
-            format_for(&style, size, mono, styled, pal),
+            format_for_mode(&style, size, mono, styled, pal, false),
         );
     }
     job
@@ -96,21 +113,33 @@ pub fn styled_font(size: f32, mono: bool, styled: bool, bold: bool, italic: bool
     FontId::new(size, FontFamily::Name(name.into()))
 }
 
-pub(super) fn format_for(
-    s: &Style,
-    size: f32,
-    mono: bool,
-    styled: bool,
-    pal: &Palette,
-) -> TextFormat {
-    let scale = match s.heading {
+/// Size factor of a heading line. Source mode never enlarges headings.
+pub fn heading_scale(level: u8, enlarge: bool) -> f32 {
+    if !enlarge {
+        return 1.0;
+    }
+    match level {
         1 => 1.6,
         2 => 1.4,
         3 => 1.25,
         4 => 1.12,
         5 | 6 => 1.05,
         _ => 1.0,
-    };
+    }
+}
+
+/// Format of a highlighted span. `live`: Live Preview (enlarged headings,
+/// monospace frontmatter); otherwise Source mode (raw markdown in the editor
+/// font, only colours and weights change).
+pub(super) fn format_for_mode(
+    s: &Style,
+    size: f32,
+    mono: bool,
+    styled: bool,
+    pal: &Palette,
+    live: bool,
+) -> TextFormat {
+    let scale = heading_scale(s.heading, live);
     let mut fmt = TextFormat {
         font_id: styled_font(
             size * scale,
@@ -154,7 +183,11 @@ pub(super) fn format_for(
     }
     if s.frontmatter || s.comment {
         fmt.color = pal.faint;
-        fmt.font_id = FontId::new(size * 0.92, FontFamily::Monospace);
+        fmt.font_id = if live {
+            FontId::new(size * 0.92, FontFamily::Monospace)
+        } else {
+            editor_font(size, mono)
+        };
     }
     fmt
 }

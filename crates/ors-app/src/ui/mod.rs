@@ -4,14 +4,20 @@
 
 mod dialogs;
 mod edit;
+mod edit_blocks;
 mod edit_deco;
 mod editor;
 mod explorer_ui;
+#[cfg(test)]
+mod git_tests;
+mod git_ui;
 mod graph;
 mod groups;
+mod heading_nav;
 mod icons;
 mod modals;
 mod panes;
+mod pdf_view;
 mod properties_view;
 mod reading_view;
 mod settings_ui;
@@ -34,6 +40,7 @@ use ors_core::{NotePath, VaultRead};
 
 use crate::backend::{DiskVault, IndexBackend, RealIndex};
 use crate::commands::Command;
+use crate::editor::DisplayMode;
 use crate::fake::{FakeIndex, demo_vault};
 use crate::settings::{LeftPane, RecentVaults, RightPane, Settings, ThemeChoice};
 use crate::state::{AppState, Modal, OpenIn, TabId, ToastKind, ViewMode};
@@ -64,6 +71,12 @@ pub enum Action {
     Props(crate::properties_model::PropAction),
     /// Workspace area (explorer, bookmarks, tab groups).
     Ws(ws_ui::WsAction),
+    /// Open a PDF at a page (1-based).
+    OpenPdf(NotePath, u32, OpenIn),
+    /// Switch the active note between Live Preview, Source and Reading.
+    SetMode(crate::editor::DisplayMode),
+    /// Git backup (explorer menu).
+    Git(git_ui::GitAction),
 }
 
 fn apply(state: &mut AppState, action: Action) {
@@ -89,6 +102,9 @@ fn apply(state: &mut AppState, action: Action) {
         Action::Edited(p) => state.buffer_edited(&p),
         Action::Props(a) => state.apply_prop_action(a),
         Action::Ws(a) => ws_ui::apply(state, a),
+        Action::OpenPdf(p, page, how) => state.open_pdf_at(&p, page, how),
+        Action::SetMode(m) => state.set_display_mode(m),
+        Action::Git(a) => git_ui::apply(state, a),
         Action::ShowBacklinks => {
             state.settings.right_open = true;
             state.settings.right_pane = RightPane::Backlinks;
@@ -107,6 +123,8 @@ pub struct UiCaches {
     find: Option<edit::FindUi>,
     explorer: explorer_ui::ExplorerCache,
     embeds: edit_deco::EmbedCache,
+    pdf: pdf_view::PdfCaches,
+    nav: heading_nav::NavCache,
 }
 
 impl UiCaches {
@@ -134,6 +152,12 @@ pub struct Startup {
     pub frames: u64,
     pub open: Vec<String>,
     pub reading: bool,
+    /// Open notes in Source mode (`--source`, screenshots).
+    pub source: bool,
+    /// Heading navigator design (`--nav off|a|b`) and forced hover position
+    /// (`--nav-hover FRACTION`), for screenshots.
+    pub nav: Option<crate::settings::HeadingNavigator>,
+    pub nav_hover: Option<f32>,
     pub graph: bool,
     /// Open the graph settings panel (screenshots).
     pub graph_panel: bool,
@@ -182,7 +206,7 @@ pub(crate) fn real_index(vault: &dyn VaultRead) -> Box<dyn IndexBackend> {
     }
 }
 
-fn fake_index(vault: &dyn VaultRead) -> Box<dyn IndexBackend> {
+pub(crate) fn fake_index(vault: &dyn VaultRead) -> Box<dyn IndexBackend> {
     Box::new(FakeIndex::build(vault))
 }
 
@@ -287,6 +311,9 @@ impl ObsiApp {
             if s.reading {
                 state.toggle_mode();
             }
+            if s.source {
+                state.set_display_mode(DisplayMode::Source);
+            }
             if s.fold_all {
                 state.editor.pending.push(Command::FoldAll);
             }
@@ -294,6 +321,10 @@ impl ObsiApp {
         if let Some(p) = state.active_note().cloned() {
             state.ws.explorer.reveal(&p);
         }
+        if let Some(m) = s.nav {
+            state.settings.heading_navigator = m;
+        }
+        self.caches.nav.force = s.nav_hover;
         if let Some(l) = s.left {
             state.settings.left_pane = l;
         }
@@ -331,6 +362,11 @@ impl ObsiApp {
                 "plugins" => P::CorePlugins,
                 "daily" => P::DailyNotes,
                 "templates" => P::Templates,
+                "git" => P::GitBackup,
+                "git-ignore" => {
+                    state.git.scroll_gitignore = true;
+                    P::GitBackup
+                }
                 "about" => P::About,
                 _ => P::Editor,
             };
@@ -565,9 +601,42 @@ fn view_header(ui: &mut egui::Ui, state: &AppState, actions: &mut Vec<Action>) {
         ui.label(RichText::new(crumbs).color(pal.muted));
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if note.path.is_markdown() {
-                let (icon, tip) = match note.mode {
-                    ViewMode::Source => (icons::BOOK_OPEN, "Reading view (Ctrl+E)"),
-                    ViewMode::Reading => (icons::PENCIL, "Editing view (Ctrl+E)"),
+                let mode = state.display_mode().unwrap_or(DisplayMode::LivePreview);
+                let more = ui.add(
+                    egui::Button::new(icons::text(icons::DOTS_THREE, 16.0).color(pal.muted))
+                        .frame(false),
+                );
+                egui::Popup::menu(&more).show(|ui| {
+                    ui.set_min_width(170.0);
+                    if ui
+                        .selectable_label(mode == DisplayMode::Source, "Source mode")
+                        .clicked()
+                    {
+                        let to = if mode == DisplayMode::Source {
+                            DisplayMode::LivePreview
+                        } else {
+                            DisplayMode::Source
+                        };
+                        actions.push(Action::SetMode(to));
+                        ui.close();
+                    }
+                    if ui
+                        .selectable_label(mode == DisplayMode::Reading, "Reading view")
+                        .clicked()
+                    {
+                        let to = if mode == DisplayMode::Reading {
+                            DisplayMode::LivePreview
+                        } else {
+                            DisplayMode::Reading
+                        };
+                        actions.push(Action::SetMode(to));
+                        ui.close();
+                    }
+                });
+                more.on_hover_text("More options");
+                let (icon, tip) = match mode {
+                    DisplayMode::Reading => (icons::PENCIL, "Current view: reading. Edit (Ctrl+E)"),
+                    _ => (icons::BOOK_OPEN, "Current view: editing. Read (Ctrl+E)"),
                 };
                 if ui
                     .add(egui::Button::new(icons::text(icon, 16.0).color(pal.muted)).frame(false))
@@ -638,6 +707,10 @@ fn leaf_content(
             {
                 editor::conflict_banner(ui, &path, actions);
             }
+            if crate::pdf::is_pdf(&path) {
+                pdf_view::pdf_tab(ui, state, caches, tab_id, &path, actions);
+                return;
+            }
             let scroll_to = if mode == ViewMode::Reading {
                 crate::views::take_pending_line(state)
             } else {
@@ -646,7 +719,12 @@ fn leaf_content(
             if mode == ViewMode::Source && path.is_markdown() {
                 edit::find_bar(ui, state, caches, tab_id, &path, actions);
             }
-            egui::ScrollArea::vertical()
+            let heads = (path.is_markdown()
+                && state.settings.heading_navigator != crate::settings::HeadingNavigator::Off)
+                .then(|| caches.nav.headings(tab_id, state, &path));
+            caches.nav.ys = None;
+            editor::set_nav_reserve(heads.as_ref().is_some_and(|h| !h.is_empty()));
+            let scroll_out = egui::ScrollArea::vertical()
                 .id_salt(("note-scroll", tab_id, mode == ViewMode::Reading))
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
@@ -655,7 +733,9 @@ fn leaf_content(
                     } else if mode == ViewMode::Reading {
                         reading_view::reading_view(ui, state, caches, &path, scroll_to, actions);
                     } else {
-                        if crate::properties_model::panel_visible(&state.settings) {
+                        if crate::properties_model::panel_visible(&state.settings)
+                            && state.display_mode() != Some(DisplayMode::Source)
+                        {
                             editor::readable_column(
                                 ui,
                                 state.settings.readable_line_length,
@@ -668,6 +748,24 @@ fn leaf_content(
                         edit::edit_view(ui, state, caches, tab_id, &path, actions);
                     }
                 });
+            if let Some(heads) = heads {
+                let dm = if mode == ViewMode::Reading {
+                    DisplayMode::Reading
+                } else {
+                    DisplayMode::LivePreview
+                };
+                heading_nav::show(
+                    ui,
+                    state,
+                    caches,
+                    tab_id,
+                    i,
+                    dm,
+                    scroll_out.inner_rect,
+                    scroll_out.state.clamped_offset().y,
+                    &heads,
+                );
+            }
         }
     }
 }
@@ -710,6 +808,7 @@ impl ObsiApp {
         let caches = &mut self.caches;
         state.tick(self.start.elapsed().as_secs_f64());
         state.poll_vault();
+        caches.pdf.gc(ctx.input(|i| i.time));
         let mut actions: Vec<Action> = Vec::new();
 
         // Shortcuts (shared with the palette through the registry).
@@ -791,6 +890,7 @@ impl ObsiApp {
             }
         }
         settings_ui::show(&ctx, state);
+        git_ui::dialogs(&ctx, state);
         groups::drag_preview(&ctx);
         toasts(&ctx, state);
 
@@ -807,7 +907,7 @@ impl ObsiApp {
         if let Some(t) = state.next_autosave_in() {
             ctx.request_repaint_after(Duration::from_secs_f64(t + 0.02));
         }
-        if state.note_info_stale() || !state.toasts.is_empty() {
+        if state.note_info_stale() || !state.toasts.is_empty() || state.git.running > 0 {
             ctx.request_repaint_after(Duration::from_millis(500));
         }
         // Poll the file watcher regularly.

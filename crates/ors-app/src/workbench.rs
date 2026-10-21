@@ -52,6 +52,7 @@ pub enum SettingsPage {
     CorePlugins,
     DailyNotes,
     Templates,
+    GitBackup,
     About,
 }
 
@@ -151,6 +152,15 @@ pub struct SavedViewState {
     /// "source" or "preview".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
+    /// Markdown tabs: `true` for Source mode, `false` for Live Preview
+    /// (Obsidian's own field). Absent in older files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<bool>,
+    /// PDF tabs: current page (1-based) and zoom (absent = fit width).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zoom: Option<f32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -215,6 +225,7 @@ fn right_pane_name(p: RightPane) -> &'static str {
         RightPane::Outline => "outline",
         RightPane::LocalGraph => "localgraph",
         RightPane::FileProperties => "file-properties",
+        RightPane::History => "obsirust-git-history",
     }
 }
 
@@ -224,15 +235,23 @@ fn right_pane_from(s: &str) -> RightPane {
         "outline" => RightPane::Outline,
         "localgraph" => RightPane::LocalGraph,
         "file-properties" => RightPane::FileProperties,
+        "obsirust-git-history" => RightPane::History,
         _ => RightPane::Backlinks,
     }
 }
 
-fn save_tab(tab: &Tab, pinned: bool) -> SavedLeaf {
+fn save_tab(
+    tab: &Tab,
+    pinned: bool,
+    pdf: Option<&crate::pdf::PdfViewState>,
+    source: Option<bool>,
+) -> SavedLeaf {
     let state = match &tab.content {
         TabContent::Note(n) => SavedView {
             kind: if n.path.is_markdown() {
                 "markdown".into()
+            } else if crate::pdf::is_pdf(&n.path) {
+                "pdf".into()
             } else {
                 "file".into()
             },
@@ -245,6 +264,9 @@ fn save_tab(tab: &Tab, pinned: bool) -> SavedLeaf {
                     }
                     .into(),
                 ),
+                source: source.filter(|_| n.path.is_markdown()),
+                page: pdf.map(|p| p.page),
+                zoom: pdf.and_then(|p| p.saved_zoom()),
             },
         },
         TabContent::Graph(g) => SavedView {
@@ -256,6 +278,9 @@ fn save_tab(tab: &Tab, pinned: bool) -> SavedLeaf {
             state: SavedViewState {
                 file: g.center.as_ref().map(|c| c.as_str().to_string()),
                 mode: None,
+                source: None,
+                page: None,
+                zoom: None,
             },
         },
     };
@@ -403,7 +428,15 @@ impl AppState {
                 let children: Vec<SavedLeaf> = ids
                     .iter()
                     .filter_map(|id| self.tabs.iter().find(|t| t.id == *id))
-                    .map(|t| save_tab(t, self.ws.layout.is_pinned(t.id)))
+                    .map(|t| {
+                        let live = self.editor.live(t.id, self.settings.default_editing_mode);
+                        save_tab(
+                            t,
+                            self.ws.layout.is_pinned(t.id),
+                            self.pdf_views.get(&t.id),
+                            Some(!live),
+                        )
+                    })
                     .collect();
                 let current_tab = group
                     .and_then(|g| g.active)
@@ -632,8 +665,29 @@ impl AppState {
                 })
             }
         };
+        let pdf = match &content {
+            TabContent::Note(n) if crate::pdf::is_pdf(&n.path) => {
+                Some(crate::pdf::PdfViewState::restored(
+                    n.path.clone(),
+                    leaf.state.state.page,
+                    leaf.state.state.zoom,
+                ))
+            }
+            _ => None,
+        };
         let i = self.push_tab(content);
-        self.tabs.get(i).map(|t| t.id)
+        let id = self.tabs.get(i).map(|t| t.id)?;
+        if let Some(source) = leaf.state.state.source {
+            let default_live =
+                self.settings.default_editing_mode == crate::settings::EditingMode::LivePreview;
+            if default_live == source {
+                self.editor.toggled_tabs.insert(id);
+            }
+        }
+        if let Some(v) = pdf {
+            self.pdf_views.insert(id, v);
+        }
+        Some(id)
     }
 
     /// Point `active` at the focused group's active tab.
@@ -669,11 +723,23 @@ impl AppState {
                 None
             }))),
         });
+        // A PDF keeps its page and zoom in the new tab.
+        let pdf_view = self.active_tab().and_then(|t| {
+            let n = t.note()?;
+            self.pdf_views
+                .get(&t.id)
+                .filter(|v| v.path == n.path)
+                .cloned()
+        });
         self.save_all();
         self.ws.layout.split(focused, dir);
         match copy {
             Some(c) => {
-                self.push_tab(c);
+                let at = self.push_tab(c);
+                if let (Some(mut v), Some(id)) = (pdf_view, self.tabs.get(at).map(|t| t.id)) {
+                    v.goto = Some(v.page);
+                    self.pdf_views.insert(id, v);
+                }
             }
             None => self.active = None,
         }
@@ -1006,6 +1072,8 @@ impl AppState {
                     self.ws.clipboard = Some(p.as_str().to_string());
                 }
             }
+            GitBackupNow => self.git_backup_now(),
+            GitOpenHistory => self.git_open_history(),
         }
     }
 }
@@ -1209,6 +1277,38 @@ mod tests {
         assert_eq!(b.note().unwrap().mode, ViewMode::Reading);
         assert_eq!(t.ws.layout.pinned.len(), 1);
         assert_eq!(t.saved_workspace(), saved);
+    }
+
+    #[test]
+    fn editing_mode_per_tab_survives_a_round_trip() {
+        use crate::editor::DisplayMode;
+        let mut s = state();
+        s.open(&p("A.md"), OpenIn::NewTab);
+        s.set_display_mode(DisplayMode::Source);
+        s.open(&p("B.md"), OpenIn::NewTab);
+        s.set_display_mode(DisplayMode::LivePreview);
+        s.open(&p("dir/C.md"), OpenIn::NewTab);
+        s.set_display_mode(DisplayMode::Reading);
+        assert!(s.save_workspace());
+
+        let mut t = state();
+        t.vault
+            .write_config_file(
+                WORKSPACE_JSON,
+                &s.vault.read_config_file(WORKSPACE_JSON).unwrap(),
+            )
+            .unwrap();
+        assert!(t.restore_workspace());
+        let mode_of = |name: &str| {
+            let tab = t.tabs.iter().find(|x| x.title() == name).unwrap();
+            crate::editor::display_mode(
+                tab.note().unwrap().mode,
+                t.editor.live(tab.id, t.settings.default_editing_mode),
+            )
+        };
+        assert_eq!(mode_of("A"), DisplayMode::Source);
+        assert_eq!(mode_of("B"), DisplayMode::LivePreview);
+        assert_eq!(mode_of("C"), DisplayMode::Reading);
     }
 
     #[test]

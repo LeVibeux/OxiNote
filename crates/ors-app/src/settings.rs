@@ -33,6 +33,8 @@ pub enum RightPane {
     LocalGraph,
     /// Properties of the active note.
     FileProperties,
+    /// Git history of the active note.
+    History,
 }
 
 /// How the frontmatter is shown in notes (Obsidian's "Properties in
@@ -54,6 +56,36 @@ pub enum EditingMode {
     #[default]
     LivePreview,
     Source,
+}
+
+/// The heading navigator on the right edge of note panels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum HeadingNavigator {
+    Off,
+    /// Ticks + a floating table of contents card on hover.
+    Floating,
+    /// Ticks magnified like the macOS Dock under the pointer.
+    #[default]
+    Loupe,
+}
+
+impl HeadingNavigator {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::Floating => "Floating outline",
+            Self::Loupe => "Magnifier",
+        }
+    }
+
+    /// Off -> Floating outline -> Magnifier -> Off.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Off => Self::Floating,
+            Self::Floating => Self::Loupe,
+            Self::Loupe => Self::Off,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -87,6 +119,8 @@ pub struct Settings {
     pub right_width: f32,
     /// Show the ribbon (left icon bar).
     pub show_ribbon: bool,
+    /// Heading navigator on the right edge of note panels.
+    pub heading_navigator: HeadingNavigator,
 }
 
 impl Default for Settings {
@@ -112,6 +146,7 @@ impl Default for Settings {
             left_width: 260.0,
             right_width: 280.0,
             show_ribbon: true,
+            heading_navigator: HeadingNavigator::default(),
         }
     }
 }

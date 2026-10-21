@@ -9,7 +9,7 @@ use super::theme::Palette;
 use super::{Action, UiCaches};
 use crate::commands::Command;
 use crate::settings::{LeftPane, RightPane};
-use crate::state::{AppState, OpenIn, ViewMode};
+use crate::state::{AppState, OpenIn};
 
 pub(super) fn open_in_from(ui: &egui::Ui, resp: &egui::Response) -> OpenIn {
     let m = ui.input(|i| i.modifiers);
@@ -141,6 +141,14 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
         ) {
             state.settings.right_pane = RightPane::FileProperties;
         }
+        if pane_tab(
+            ui,
+            cur == RightPane::History,
+            super::git_ui::HISTORY,
+            "Historique de version",
+        ) {
+            state.settings.right_pane = RightPane::History;
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if ui
                 .small_button("↗")
@@ -168,6 +176,7 @@ pub fn right_sidebar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<
         RightPane::FileProperties => {
             super::properties_view::panel(ui, state, &path, "side", false, actions);
         }
+        RightPane::History => super::git_ui::history_pane(ui, state, &path),
         RightPane::LocalGraph => {}
     }
 }
@@ -195,9 +204,26 @@ fn side_note(state: &AppState) -> Option<NotePath> {
         .cloned()
 }
 
+/// View state of the active tab when it shows a PDF.
+fn pdf_status(state: &AppState) -> Option<crate::pdf::PdfViewState> {
+    let t = state.active_tab()?;
+    let n = t.note()?;
+    if !crate::pdf::is_pdf(&n.path) {
+        return None;
+    }
+    Some(
+        state
+            .pdf_views
+            .get(&t.id)
+            .filter(|v| v.path == n.path)
+            .cloned()
+            .unwrap_or_else(|| crate::pdf::PdfViewState::new(n.path.clone())),
+    )
+}
+
 pub fn status_bar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Action>) {
     let pal = Palette::of(ui.ctx());
-    let mode = state.active_tab().and_then(|t| t.note()).map(|n| n.mode);
+    let mode = state.display_mode();
     let path = state.active_note().cloned();
     let dirty = path
         .as_ref()
@@ -208,23 +234,28 @@ pub fn status_bar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Act
         .and_then(|p| state.buffers.get(p))
         .map_or(0, |b| b.text.chars().count());
     let info = state.note_info().clone();
+    let pdf = pdf_status(state);
     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 14.0;
         let small = |t: String| RichText::new(t).size(12.0).color(pal.muted);
-        if let Some(mode) = mode {
-            let label = match mode {
-                ViewMode::Source => "✏ Editing",
-                ViewMode::Reading => "📖 Reading",
-            };
-            if ui
-                .add(egui::Label::new(small(label.into())).sense(Sense::click()))
-                .on_hover_text("Toggle reading view (Ctrl+E)")
+        if let Some(mode) = mode
+            && ui
+                .add(egui::Label::new(small(mode.label().into())).sense(Sense::click()))
+                .on_hover_text("Click to switch Live Preview / Source mode (Ctrl+E: reading view)")
                 .clicked()
-            {
-                actions.push(Action::Exec(Command::ToggleMode));
-            }
+        {
+            actions.push(Action::Exec(Command::ToggleLivePreview));
         }
-        if path.is_some() {
+        if let Some(pdf) = pdf {
+            let zoom = format!("{:.0}%", pdf.zoom * 100.0);
+            ui.label(small(zoom));
+            let page = if pdf.page_count > 0 {
+                format!("Page {} / {}", pdf.page, pdf.page_count)
+            } else {
+                format!("Page {}", pdf.page)
+            };
+            ui.label(small(page));
+        } else if path.is_some() {
             ui.label(small(format!("{chars} characters")));
             ui.label(small(format!("{} words", info.word_count)));
             let r = ui.add(
@@ -240,5 +271,6 @@ pub fn status_bar(ui: &mut egui::Ui, state: &mut AppState, actions: &mut Vec<Act
                 None => ui.label(small(String::new())),
             };
         }
+        super::git_ui::status_item(ui, state, actions);
     });
 }

@@ -99,6 +99,23 @@ renommage et fusion de tags dans tout le vault, commandes CLI `props`, `prop`, `
 | Espace de travail | Onglets et panneaux scindés, explorateur complet (glisser-déposer, tri, révéler le fichier), signets, notes quotidiennes, templates, palette de commandes, raccourcis configurables, réglages (fenêtre Settings), thèmes et snippets CSS |
 | Vues | Graphe global/local avec groupes de couleurs et forces réglables, recherche avec aperçu en contexte, backlinks avec contexte, plan (outline), mode lecture avec transclusion des embeds |
 
+## 5 ter. Phase 3 — Au-delà de la parité
+
+**Fait** : CI GitHub Actions (Linux, macOS, Windows) ; modes Live Preview / Source / Lecture
+fidèles ; navigation par titres (styles « Sommaire flottant » et « Loupe ») ; lecteur PDF
+(`hayro`, onglets et embeds) ; sauvegarde Git locale (commit automatique, `.gitignore`,
+historique et restauration par note).
+
+**Feuille de route** (par ordre de priorité) :
+
+| Fonction | Contenu |
+|---|---|
+| Bases | Vues tableau des notes filtrées et triées par propriétés, éditables en place (format `.base` d'Obsidian) : bibliographie, suivi d'expériences, candidatures |
+| Canvas | Tableau blanc de cartes, notes, images et liens (format `.canvas` / JSON Canvas) |
+| Citations | Import BibTeX / Zotero, autocomplétion `[@clé]`, note de lecture par article |
+| PDF (suite) | Sélection et recherche de texte, embeds en Live Preview, annotations |
+| Git (suite) | Remote optionnel (push / pull) pour synchroniser entre machines |
+
 ## 6. Vault d'exemple
 
 `examples/sample-vault/` : petit vault couvrant toutes les syntaxes, utilisé par les tests d'intégration,
