@@ -147,6 +147,7 @@ pub struct Startup {
     pub settings: Option<String>,
     /// Split the workspace and open the next notes in the right group.
     pub split: bool,
+    pub split_down: bool,
 }
 
 pub struct ObsiApp {
@@ -307,6 +308,9 @@ impl ObsiApp {
         }
         if s.graph {
             state.open_graph(false);
+        }
+        if s.split_down {
+            state.exec_ws(crate::ws_commands::WsCommand::SplitDown);
         }
         if s.split {
             state.exec_ws(crate::ws_commands::WsCommand::SplitRight);
@@ -649,7 +653,8 @@ fn leaf_content(
                                 ui,
                                 state.settings.readable_line_length,
                                 |ui| {
-                                    properties_view::panel(ui, state, &path, "doc", true, actions);
+                                    let scope = format!("doc{tab_id}");
+                                    properties_view::panel(ui, state, &path, &scope, true, actions);
                                 },
                             );
                         }

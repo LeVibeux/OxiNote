@@ -313,7 +313,7 @@ fn click(ctx: &egui::Context, app: &mut ObsiApp, id: egui::Id) {
 }
 
 fn prop_id(path: &str, key: &str, what: &str) -> egui::Id {
-    egui::Id::unique(("prop", "doc", path, key, what))
+    egui::Id::unique(("prop", "doc1", path, key, what))
 }
 
 #[test]

@@ -24,6 +24,8 @@ pub enum WsAction {
     MoveBookmark(Vec<usize>, Vec<usize>),
     ShiftBookmark(Vec<usize>, isize),
     RemoveBookmark(Vec<usize>),
+    RenameBookmark(Vec<usize>, String),
+    UngroupBookmark(Vec<usize>),
     // tab groups
     ActivateTab(TabId),
     CloseTab(TabId),
@@ -81,6 +83,16 @@ pub fn apply(state: &mut AppState, action: WsAction) {
         WsAction::RemoveBookmark(path) => {
             state.ws.bookmarks.remove(&path);
             state.bookmarks_changed();
+        }
+        WsAction::RenameBookmark(path, title) => {
+            if state.ws.bookmarks.rename_item(&path, &title) {
+                state.bookmarks_changed();
+            }
+        }
+        WsAction::UngroupBookmark(path) => {
+            if state.ws.bookmarks.ungroup(&path) {
+                state.bookmarks_changed();
+            }
         }
         WsAction::ActivateTab(id) => {
             if let Some(i) = state.tab_index(id) {

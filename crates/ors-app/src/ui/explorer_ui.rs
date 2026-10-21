@@ -534,6 +534,10 @@ fn file_menu(
         actions.push(Action::Open(f.clone(), OpenIn::SplitRight));
         ui.close();
     }
+    if ui.button("Open below").clicked() {
+        actions.push(Action::Open(f.clone(), OpenIn::SplitDown));
+        ui.close();
+    }
     ui.separator();
     if f.is_markdown() && ui.button("Make a copy").clicked() {
         ws(actions, WsAction::Duplicate(f.clone()));
@@ -743,14 +747,42 @@ fn bookmark_list(
             super::icons::font(14.0),
             pal.muted,
         );
-        ui.painter().with_clip_rect(rect).text(
-            egui::pos2(x + 22.0, rect.center().y),
-            Align2::LEFT_CENTER,
-            b.label(),
-            FontId::proportional(13.5),
-            pal.text,
-        );
-        if resp.clicked() || resp.middle_clicked() {
+        let rename_id = ui.make_persistent_id(("bm-rename", path.clone()));
+        let renaming = ui.data(|d| d.get_temp::<String>(rename_id));
+        if let Some(mut text) = renaming {
+            let edit_rect = egui::Rect::from_min_max(
+                egui::pos2(x + 22.0, rect.top() + 1.0),
+                egui::pos2(rect.right() - 4.0, rect.bottom() - 1.0),
+            );
+            let edit = ui.put(
+                edit_rect,
+                egui::TextEdit::singleline(&mut text).font(FontId::proportional(13.5)),
+            );
+            let (enter, esc) =
+                ui.input(|i| (i.key_pressed(Key::Enter), i.key_pressed(Key::Escape)));
+            if !edit.has_focus() && !edit.lost_focus() {
+                edit.request_focus();
+            }
+            if esc {
+                ui.data_mut(|d| d.remove::<String>(rename_id));
+            } else if enter || edit.lost_focus() {
+                ws(actions, WsAction::RenameBookmark(path.clone(), text));
+                ui.data_mut(|d| d.remove::<String>(rename_id));
+            } else {
+                ui.data_mut(|d| d.insert_temp(rename_id, text));
+            }
+        } else {
+            ui.painter().with_clip_rect(rect).text(
+                egui::pos2(x + 22.0, rect.center().y),
+                Align2::LEFT_CENTER,
+                b.label(),
+                FontId::proportional(13.5),
+                pal.text,
+            );
+        }
+        if resp.double_clicked() {
+            ui.data_mut(|d| d.insert_temp(rename_id, b.label()));
+        } else if resp.clicked() || resp.middle_clicked() {
             if b.is_group() {
                 ui.data_mut(|d| d.insert_temp(id, !open));
             } else {
@@ -777,6 +809,10 @@ fn bookmark_list(
                 ws(actions, WsAction::OpenBookmark(b.clone(), OpenIn::NewTab));
                 ui.close();
             }
+            if ui.button("Rename").clicked() {
+                ui.data_mut(|d| d.insert_temp(rename_id, b.label()));
+                ui.close();
+            }
             if ui.button("Move up").clicked() {
                 ws(actions, WsAction::ShiftBookmark(this.clone(), -1));
                 ui.close();
@@ -790,7 +826,18 @@ fn bookmark_list(
                 ui.close();
             }
             ui.separator();
-            if ui.button("Remove bookmark").clicked() {
+            if b.is_group() && ui.button("Delete group (keep items)").clicked() {
+                ws(actions, WsAction::UngroupBookmark(this.clone()));
+                ui.close();
+            }
+            if ui
+                .button(if b.is_group() {
+                    "Delete group and items"
+                } else {
+                    "Remove bookmark"
+                })
+                .clicked()
+            {
                 ws(actions, WsAction::RemoveBookmark(this.clone()));
                 ui.close();
             }

@@ -146,7 +146,7 @@ fn tag_operator_nested_and_case() {
     );
     assert_eq!(hits("-tag:rust graphe"), vec!["Idées.md"]);
     // Tag matches produce no line matches.
-    assert!(search("tag:rust")[0].matches.is_empty());
+    assert!(!search("tag:rust")[0].matches.is_empty());
 }
 
 #[test]

@@ -1212,6 +1212,57 @@ mod tests {
     }
 
     #[test]
+    fn open_in_split_down_creates_group_below() {
+        let mut s = state();
+        s.open(&p("A.md"), OpenIn::CurrentTab);
+        s.open(&p("B.md"), OpenIn::SplitDown);
+        assert_eq!(s.ws.layout.groups.len(), 2);
+        assert_eq!(s.active_note(), Some(&p("B.md")));
+        let json = serde_json::to_string(&s.saved_workspace()).unwrap();
+        assert!(json.contains("\"direction\":\"horizontal\""), "{json}");
+    }
+
+    #[test]
+    fn workspace_round_trip_on_disk() {
+        let dir = std::env::temp_dir().join(format!("obsirust-ws-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(std::fs::create_dir_all(dir.join("dir")).is_ok());
+        for (f, c) in [("A.md", "# A"), ("B.md", "b"), ("dir/C.md", "c")] {
+            assert!(std::fs::write(dir.join(f), c).is_ok());
+        }
+        let open = || {
+            AppState::new(
+                Box::new(crate::backend::DiskVault::open(&dir).unwrap()),
+                |v| Box::new(FakeIndex::build(v)),
+                Settings::default(),
+            )
+        };
+        let mut s = open();
+        s.open(&p("A.md"), OpenIn::CurrentTab);
+        s.open(&p("B.md"), OpenIn::SplitRight);
+        s.open(&p("dir/C.md"), OpenIn::SplitDown);
+        s.open(&p("A.md"), OpenIn::NewTab);
+        s.settings.left_width = 280.0;
+        s.settings.right_width = 345.0;
+        s.settings.right_open = false;
+        s.settings.right_pane = RightPane::Outline;
+        let saved = s.saved_workspace();
+        s.shutdown();
+        assert!(dir.join(".obsidian").join(WORKSPACE_JSON).exists());
+
+        let mut t = open();
+        assert!(t.restore_workspace());
+        assert_eq!(t.ws.layout.groups.len(), 3);
+        assert_eq!(t.tabs.len(), 4);
+        assert_eq!(t.settings.left_width, 280.0);
+        assert_eq!(t.settings.right_width, 345.0);
+        assert!(!t.settings.right_open);
+        assert_eq!(t.settings.right_pane, RightPane::Outline);
+        assert_eq!(t.saved_workspace(), saved);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn restore_skips_missing_files() {
         let mut s = state();
         let saved: SavedWorkspace = serde_json::from_str(

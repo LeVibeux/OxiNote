@@ -32,6 +32,8 @@ pub enum OpenIn {
     NewTab,
     /// New tab in a new group to the right of the focused one.
     SplitRight,
+    /// New tab in a new group below the focused one.
+    SplitDown,
 }
 
 /// A note (or attachment) tab with its own navigation history.
@@ -415,9 +417,14 @@ impl AppState {
         self.recent_files.retain(|p| p != path);
         self.recent_files.insert(0, path.clone());
         self.recent_files.truncate(30);
-        if open_in == OpenIn::SplitRight {
+        let split = match open_in {
+            OpenIn::SplitRight => Some(crate::workspace::SplitDir::Right),
+            OpenIn::SplitDown => Some(crate::workspace::SplitDir::Down),
+            _ => None,
+        };
+        if let Some(dir) = split {
             let g = self.ws.layout.focused;
-            self.ws.layout.split(g, crate::workspace::SplitDir::Right);
+            self.ws.layout.split(g, dir);
         }
         let pinned = self
             .active_tab()
@@ -1218,6 +1225,7 @@ impl AppState {
     /// Called before the app exits.
     pub fn shutdown(&mut self) {
         self.save_all();
+        self.save_workspace();
     }
 }
 
