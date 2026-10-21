@@ -149,6 +149,8 @@ pub struct Startup {
     pub settings: Option<String>,
     /// Split the workspace and open the next notes in the right group.
     pub split: bool,
+    /// Fold every heading and list on opening (`--fold-all`, screenshots).
+    pub fold_all: bool,
 }
 
 pub struct ObsiApp {
@@ -283,6 +285,9 @@ impl ObsiApp {
             }
             if s.reading {
                 state.toggle_mode();
+            }
+            if s.fold_all {
+                state.editor.pending.push(Command::FoldAll);
             }
         }
         if let Some(p) = state.active_note().cloned() {

@@ -134,6 +134,7 @@ pub fn fold_controls(
     tab: TabId,
     folds: &[FoldRange],
     folded: &[usize],
+    hidden: &HashSet<usize>,
     rows: &[LineRow],
     origin: Pos2,
     width: f32,
@@ -143,7 +144,9 @@ pub fn fold_controls(
     let hover = ui.input(|i| i.pointer.hover_pos());
     let mut toggled = None;
     for (i, f) in folds.iter().enumerate() {
-        let Some(r) = rows.get(f.start) else { continue };
+        let Some(r) = rows.get(f.start).filter(|_| !hidden.contains(&f.start)) else {
+            continue;
+        };
         let (y0, y1) = (origin.y + r.top, origin.y + r.bottom);
         if y1 < clip.top() || y0 > clip.bottom() {
             continue;
@@ -277,6 +280,7 @@ impl EmbedCache {
 
     /// The images of the inactive lines of `images`, sized for a column
     /// `max_w` wide; remembered for the painting pass.
+    #[allow(clippy::too_many_arguments)]
     pub fn layout(
         &mut self,
         tab: TabId,
@@ -323,7 +327,7 @@ mod tests {
     fn galley_of(text: &str, width: f32) -> std::sync::Arc<Galley> {
         let ctx = Context::default();
         let mut out = None;
-        let _ = ctx.run_ui(Default::default(), |ui| {
+        let mut o = ctx.run_ui(Default::default(), |ui| {
             let mut job = LayoutJob::simple(
                 text.to_string(),
                 FontId::proportional(14.0),
@@ -333,6 +337,7 @@ mod tests {
             job.wrap.max_width = width;
             out = Some(ui.fonts_mut(|f| f.layout_job(job)));
         });
+        o.textures_delta.clear();
         out.expect("galley")
     }
 

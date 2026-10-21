@@ -71,7 +71,7 @@ pub fn image_line(line: &str) -> Option<ImageRef> {
             return None;
         }
         // The size is the last numeric part (`![[a.png|alt|300]]`).
-        let size = parts.filter_map(parse_size).last();
+        let size = parts.filter_map(parse_size).next_back();
         return Some(ImageRef {
             target: target.to_string(),
             width: size.map(|s| s.0),

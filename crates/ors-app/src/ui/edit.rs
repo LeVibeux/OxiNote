@@ -994,9 +994,13 @@ fn edit_body(
         }
     }
 
+    let folded_idx = fold::folded_indices(text_ref, &decor.lines, &decor.folds, &fold_keys);
+    let hidden = fold::hidden_lines(&decor.folds, &folded_idx);
     // ---- Live Preview widgets ------------------------------------------
     let toggle_line = if live {
-        paint_widgets(ui, &decor, text_ref, &output, &active, &pal, tab_id)
+        paint_widgets(
+            ui, &decor, text_ref, &output, &active, &hidden, &pal, tab_id,
+        )
     } else {
         None
     };
@@ -1004,8 +1008,6 @@ fn edit_body(
     // ---- gutter, folds and inline images --------------------------------
     {
         let rows = edit_deco::line_rows(&galley);
-        let folded_idx = fold::folded_indices(text_ref, &decor.lines, &decor.folds, &fold_keys);
-        let hidden = fold::hidden_lines(&decor.folds, &folded_idx);
         if show_numbers {
             let caret_line = output.cursor_range.map(|r| {
                 line_of(
@@ -1020,6 +1022,7 @@ fn edit_body(
             tab_id,
             &decor.folds,
             &folded_idx,
+            &hidden,
             &rows,
             origin,
             output.response.rect.width(),
@@ -1213,12 +1216,14 @@ fn byte_at(galley: &egui::Galley, origin: Pos2, text: &str, pos: Pos2) -> usize 
 /// Paint bullets, checkboxes, rules, quote bars and callout tints over the
 /// blank glyphs of lines that do not hold the caret. Returns the line of a
 /// checkbox that was clicked.
+#[allow(clippy::too_many_arguments)]
 fn paint_widgets(
     ui: &mut egui::Ui,
     decor: &Decor,
     text: &str,
     output: &egui::text_edit::TextEditOutput,
     active: &Range<usize>,
+    hidden: &HashSet<usize>,
     pal: &Palette,
     tab_id: TabId,
 ) -> Option<usize> {
@@ -1241,7 +1246,7 @@ fn paint_widgets(
     };
     let painter = ui.painter().clone();
     for (n, l) in decor.lines.iter().enumerate() {
-        if active.contains(&n) {
+        if active.contains(&n) || hidden.contains(&n) {
             continue;
         }
         let top = rect_at(n, l.range.start);
@@ -1282,7 +1287,7 @@ fn paint_widgets(
         }
     }
     for (w, n) in &decor.widgets {
-        if active.contains(n) {
+        if active.contains(n) || hidden.contains(n) {
             continue;
         }
         match w {
