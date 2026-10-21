@@ -498,6 +498,7 @@ impl<K: std::hash::Hash + Eq + Copy, V> LruCache<K, V> {
         }
     }
 
+    #[cfg(test)]
     pub fn len(&self) -> usize {
         self.map.len()
     }

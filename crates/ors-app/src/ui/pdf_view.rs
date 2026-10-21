@@ -495,7 +495,7 @@ pub fn pdf_tab(
 
     // Zoom in effect.
     let avail_w = ui.available_width();
-    let ref_w = sizes[(view.page - 1) as usize].0;
+    let ref_w = sizes.iter().map(|s| s.0).fold(1.0_f32, f32::max);
     let mut zoom = if view.fit_width {
         fit_width_zoom(avail_w - 2.0 * MARGIN_X - SCROLLBAR, ref_w)
     } else {
@@ -550,14 +550,19 @@ pub fn pdf_tab(
     }
     vs.last_zoom = zoom;
 
-    let mut sa = egui::ScrollArea::both()
-        .id_salt(("pdf-scroll", tab_id))
-        .auto_shrink([false, false]);
+    let needs_h = layout.max_width + 2.0 * MARGIN_X > avail_w - SCROLLBAR;
+    let mut sa = if needs_h {
+        egui::ScrollArea::both()
+    } else {
+        egui::ScrollArea::vertical()
+    }
+    .id_salt(("pdf-scroll", tab_id))
+    .auto_shrink([false, false]);
     if let Some(y) = forced {
         sa = sa.vertical_scroll_offset(y);
     }
     let out = sa.show_viewport(ui, |ui, viewport| {
-        let content_w = (layout.max_width + 2.0 * MARGIN_X).max(ui.available_width());
+        let content_w = (layout.max_width + 2.0 * MARGIN_X).max(avail_w - SCROLLBAR);
         let (origin, _) =
             ui.allocate_exact_size(vec2(content_w, layout.total_height), Sense::hover());
         paint_visible(ui, doc, &pal, &layout, viewport, origin, zoom, false);
