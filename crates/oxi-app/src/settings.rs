@@ -121,6 +121,10 @@ pub struct Settings {
     pub show_ribbon: bool,
     /// Heading navigator on the right edge of note panels.
     pub heading_navigator: HeadingNavigator,
+    /// Multiplier of trackpad and mouse wheel scrolling.
+    pub scroll_speed: f32,
+    /// Spread wheel steps over a few frames (off: apply them at once).
+    pub smooth_scrolling: bool,
     /// What to do when a new release is published.
     pub update_mode: crate::update::UpdateMode,
     /// Last check for a new release (Unix seconds).
@@ -151,6 +155,8 @@ impl Default for Settings {
             right_width: 280.0,
             show_ribbon: true,
             heading_navigator: HeadingNavigator::default(),
+            scroll_speed: 1.0,
+            smooth_scrolling: true,
             update_mode: crate::update::UpdateMode::default(),
             update_checked_at: 0,
         }
