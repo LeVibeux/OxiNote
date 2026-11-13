@@ -1,0 +1,89 @@
+{
+  "nodes": [
+    {
+      "id": "Accueil.md",
+      "label": "Accueil",
+      "kind": "note",
+      "path": "Accueil.md",
+      "degree": 6
+    },
+    {
+      "id": "Idées.md",
+      "label": "Idées",
+      "kind": "note",
+      "path": "Idées.md",
+      "degree": 4
+    },
+    {
+      "id": "Journal/2026-10-20.md",
+      "label": "2026-10-20",
+      "kind": "note",
+      "path": "Journal/2026-10-20.md",
+      "degree": 3
+    },
+    {
+      "id": "Projets/OxiNote.md",
+      "label": "OxiNote",
+      "kind": "note",
+      "path": "Projets/OxiNote.md",
+      "degree": 7
+    },
+    {
+      "id": "Projets/Rust notes.md",
+      "label": "Rust notes",
+      "kind": "note",
+      "path": "Projets/Rust notes.md",
+      "degree": 4
+    }
+  ],
+  "edges": [
+    {
+      "source": 0,
+      "target": 1
+    },
+    {
+      "source": 0,
+      "target": 2
+    },
+    {
+      "source": 0,
+      "target": 3
+    },
+    {
+      "source": 0,
+      "target": 4
+    },
+    {
+      "source": 1,
+      "target": 0
+    },
+    {
+      "source": 1,
+      "target": 3
+    },
+    {
+      "source": 2,
+      "target": 3
+    },
+    {
+      "source": 2,
+      "target": 4
+    },
+    {
+      "source": 3,
+      "target": 0
+    },
+    {
+      "source": 3,
+      "target": 1
+    },
+    {
+      "source": 3,
+      "target": 4
+    },
+    {
+      "source": 4,
+      "target": 3
+    }
+  ]
+}

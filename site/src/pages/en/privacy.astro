@@ -1,0 +1,95 @@
+---
+import Base from "../../layouts/Base.astro";
+---
+
+<Base
+  lang="en"
+  title="Legal notice and privacy — OxiNote"
+  description="Legal notice and privacy policy for the private OxiNote presentation."
+  path="/en/privacy/"
+  altPath="/fr/confidentialite/"
+>
+  <article class="sheet page-head legal">
+    <p class="kicker">Quebec · Private Sector Act</p>
+    <h1>Legal notice and privacy policy</h1>
+    <p class="lede">This text describes this presentation. It is not legal advice.</p>
+
+    <section id="scope">
+      <h2>Scope</h2>
+      <p>The page is a private presentation, in French and in English, for its publisher in Quebec. It is not offered to the public of the European Union. The GDPR and the ePrivacy directive are therefore not treated here as the applicable law. If people in the European Union are later invited, the analysis has to be done again.</p>
+      <p>The Act respecting the protection of personal information in the private sector (chapter P-39.1, amended by Law 25) is the reference text. The federal PIPEDA covers commercial activities. Quebec has a statute found substantially similar for collection that stays in the province. The Office of the Privacy Commissioner of Canada states that commercial processing that crosses a border remains subject to PIPEDA. Hosting the traffic at Cloudflare sends information outside Quebec. It is for the publisher to characterise the activity.</p>
+    </section>
+
+    <section id="controller">
+      <h2>Publisher and person responsible</h2>
+      <table>
+        <tbody>
+          <tr><th>Publisher</th><td>LeVibeux</td></tr>
+          <tr><th>Place</th><td>Quebec</td></tr>
+          <tr><th>Person responsible for the protection of personal information</th><td>LeVibeux, the publisher</td></tr>
+          <tr><th>Contact</th><td><a href="https://github.com/LeVibeux">github.com/LeVibeux</a></td></tr>
+        </tbody>
+      </table>
+      <p>Section 3.1 provides that the person with the highest authority exercises this function, unless it is delegated in writing. Here the publisher and the person responsible are the same: LeVibeux. The published contact is the GitHub profile above. This page has no postal address.</p>
+    </section>
+
+    <section id="data">
+      <h2>Information, purposes, retention</h2>
+      <p>The files contain no form and do not ask for an OxiNote account. A script, served by the same host as the page, animates the demonstration of the <code>oxinote</code> command. It opens no connection: the content security policy forbids it (<code>connect-src 'none'</code>). It sets no cookie and writes nothing in the browser. Two categories of information can appear once the page is hosted.</p>
+      <table>
+        <thead>
+          <tr><th>Information</th><th>Means</th><th>Purpose</th><th>Retention</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Email address used for the one-time code</td>
+            <td>Cloudflare Access, after the setup in <code>site/DEPLOY.md</code></td>
+            <td>Check that the allowed person can open the page</td>
+            <td>Access session of 24 hours. Cloudflare may keep an authentication record under its own contract.</td>
+          </tr>
+          <tr>
+            <td>Platform logs: IP address, time, URL, user agent, status code</td>
+            <td>The Cloudflare network, as host</td>
+            <td>Deliver the request</td>
+            <td>Whatever retention Cloudflare applies. The publisher does not set that period here.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><code>observability.enabled</code> is <code>false</code> in <code>site/wrangler.jsonc</code>. The publisher therefore does not ask Workers to keep logs or traces on the publisher’s behalf. That does not remove the platform logs Cloudflare keeps on its own.</p>
+      <p>No audience measurement, no advertising, no reading profile. A feature of that kind, if added later, would stay off until the person takes a clear step to turn it on (section 8.1).</p>
+      <p>Section 8 requires, at the time of collection, the purposes, the means, the rights of access and rectification, the right to withdraw consent, and where relevant the third parties and a communication outside Quebec. This page is that text.</p>
+    </section>
+
+    <section id="cookies">
+      <h2>Cookies</h2>
+      <p>The page sets no cookie. The typefaces (Fraunces, IBM Plex Mono) and the script come from the same host, not from another site. There is no banner: nothing to accept beyond signing in.</p>
+      <p>After a successful Access login, Cloudflare sets <code>CF_Authorization</code>. That cookie carries the session, here 24 hours, so the code is not asked again on every request. It is required for that authentication. It is not a measurement cookie.</p>
+      <p>Section 9.1 requires the highest privacy level by default for a technological service offered to the public; its second paragraph sets cookie privacy settings aside. Section 8.1 covers technologies that identify, locate or profile: they do not turn on by themselves. The Commission d’accès à l’information describes the same default for cookies that profile, identify or locate.</p>
+    </section>
+
+    <section id="hosting">
+      <h2>Hosting</h2>
+      <p>The chosen host is Cloudflare Workers, name <code>oxinote-prive</code>, on the account’s <code>workers.dev</code> subdomain, with no custom domain. Version URLs are off (<code>preview_urls</code> false). Cloudflare runs a network outside Quebec.</p>
+      <p>Before communicating personal information outside Quebec, section 17 requires a privacy impact assessment and a written agreement. The same requirement applies when someone outside Quebec is entrusted with collection, use or storage. This page is not that assessment.</p>
+    </section>
+
+    <section id="rights">
+      <h2>Rights</h2>
+      <p>The Private Sector Act provides, among other things, for a copy of information held, including in a structured technological format where section 27 so provides, for rectification (section 28), for withdrawal of consent to use or communication (section 8), and, in the cases of section 28.1, for cessation of dissemination or de-indexing.</p>
+      <p>A request for access or rectification is in writing and addressed to the person responsible (section 30). The answer is in writing, within 30 days (section 32). A refusal is explained (section 34).</p>
+      <p>The published channel is the profile <a href="https://github.com/LeVibeux">github.com/LeVibeux</a>. Say that the request is about personal information on the OxiNote page, and give a way to confirm identity without sending a full identity document if a narrower means is enough.</p>
+      <p>A complaint can also go to the <a href="https://www.cai.gouv.qc.ca/">Commission d’accès à l’information du Québec</a>. For PIPEDA: the <a href="https://www.priv.gc.ca/">Office of the Privacy Commissioner of Canada</a>.</p>
+    </section>
+
+    <section id="security">
+      <h2>Measures and incidents</h2>
+      <p>The page is meant to sit behind Cloudflare Access (one email address, a one-time code, a 24-hour session), with no advertised domain, and with a tag asking crawlers not to index it. Section 10 requires reasonable measures given sensitivity, purpose, quantity, distribution and medium.</p>
+      <p>An incident with a risk of serious injury is reported to the Commission and to the persons concerned (sections 3.5 and following). The person to reach is LeVibeux, via <a href="https://github.com/LeVibeux">github.com/LeVibeux</a>.</p>
+    </section>
+
+    <section id="version">
+      <h2>Version of this text</h2>
+      <p>13 November 2026. This revision records that the page now loads a same-host script to animate a demonstration, still with no cookie set by the page and no audience measurement. A change has to be sent in a way that reaches the persons concerned (section 8.2). The intended means is the same GitHub profile.</p>
+    </section>
+  </article>
+</Base>

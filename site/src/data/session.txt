@@ -1,0 +1,65 @@
+oxinote --version
+oxinote 0.3.0
+
+oxinote stats examples/sample-vault
+Vault:       sample-vault
+Notes:       7
+Attachments: 1
+Links:       18 (16 resolved, 2 unresolved; 3 embeds)
+Tags:        6 distinct, 10 occurrences
+Orphans:     2
+Words:       198
+Tasks:       5 (1 done)
+
+oxinote search examples/sample-vault surlignage
+Idées.md:13: - [x] Parser les ==surlignages==
+
+oxinote backlinks examples/sample-vault Accueil
+Idées.md:6: [[Accueil]]
+Idées.md:18: [[Accueil#Accueil|liens]]
+Projets/OxiNote.md:15: [[Accueil]]
+
+oxinote links examples/sample-vault Projets/OxiNote
+   7 ✓ [[Rust notes]] → Projets/Rust notes.md
+   7 ✓ [[Idées#Fonctionnalités]] → Idées.md
+  15 ✓ [[Accueil]] → Accueil.md
+
+oxinote unresolved examples/sample-vault
+Canvas ← Idées.md
+Note fantôme ← Accueil.md
+
+oxinote tags examples/sample-vault --tree
+#hub (2)
+#idée (1)
+#journal (1)
+#meta (1)
+  organisation (1)
+#projet (3)
+  oxinote (3)
+#rust (2)
+
+oxinote props examples/sample-vault
+aliases  aliases   1
+date     date?     1
+related  text?     1
+status   text?     1
+tags     tags      3
+
+oxinote orphans examples/sample-vault
+Orpheline.md
+Templates/Daily.md
+
+oxinote find examples/sample-vault oxinote
+Projets/OxiNote.md
+
+oxinote rename examples/sample-vault Idées Notes/Idées --dry-run
+Would rename Idées.md → Notes/Idées.md
+Would update links in 2 note(s):
+  Accueil.md
+  Projets/OxiNote.md
+
+oxinote daily examples/sample-vault --date 2026-10-20
+/agent/repos/OxiNote/examples/sample-vault/Journal/2026-10-20.md
+
+oxinote export examples/sample-vault /tmp/ox-export-site-demo
+Exported 7 notes and 1 attachments to /tmp/ox-export-site-demo

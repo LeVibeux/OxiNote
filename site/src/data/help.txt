@@ -1,0 +1,25 @@
+Headless tools for Obsidian vaults: statistics, search, links, graph, renaming with link updates, daily notes and static HTML export
+
+Usage: oxinote <COMMAND>
+
+Commands:
+  stats       Show statistics: notes, attachments, links, tags, orphans, words
+  search      Full-text search with Obsidian's syntax (tag:, path:, file:, "phrase", -word, OR, /regex/ ...)
+  backlinks   List the links pointing to a note (backlinks)
+  links       List the outgoing links of a note, marking resolved (✓) and unresolved (✗) ones
+  unresolved  List link targets that do not exist, with the notes linking to them
+  tags        List tags with their number of occurrences (nested tags count for their parents)
+  props       List every property used in the vault with its type and number of notes
+  prop        Edit the properties (frontmatter) of a note
+  tag         Rename tags across the vault, or add / remove a tag on a note
+  orphans     List notes without any incoming or outgoing link
+  find        Fuzzy-find notes by name, path or alias (like the quick switcher)
+  graph       Export the link graph as JSON or Graphviz DOT
+  rename      Rename or move a note and update every link pointing to it
+  daily       Open (create if needed) the daily note and print its path on disk
+  export      Export the vault as a static HTML site
+  help        Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version

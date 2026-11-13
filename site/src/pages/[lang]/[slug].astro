@@ -1,0 +1,158 @@
+---
+import Base from "../../layouts/Base.astro";
+import Downloads from "../../components/Downloads.astro";
+import Rich from "../../components/Rich.astro";
+import {
+  features,
+  ui,
+  otherLang,
+  featurePath,
+  type Feature,
+  type Lang,
+} from "../../data/features";
+import session from "../../data/session.txt?raw";
+import helpText from "../../data/help.txt?raw";
+import graphJson from "../../data/graph.json?raw";
+import tagHelp from "../../data/tag-help.txt?raw";
+import propHelp from "../../data/prop-help.txt?raw";
+
+export function getStaticPaths() {
+  const paths: { params: { lang: Lang; slug: string }; props: { lang: Lang; feature: Feature } }[] = [];
+  for (const lang of ["fr", "en"] as Lang[]) {
+    for (const feature of features) {
+      paths.push({
+        params: { lang, slug: feature.slug[lang] },
+        props: { lang, feature },
+      });
+    }
+  }
+  return paths;
+}
+
+interface Props {
+  lang: Lang;
+  feature: Feature;
+}
+const { lang, feature } = Astro.props;
+const t = ui[lang];
+const alt = otherLang(lang);
+const index = features.findIndex((item) => item.id === feature.id);
+const next = features[(index + 1) % features.length];
+const path = featurePath(feature, lang);
+const altPath = featurePath(feature, alt);
+---
+
+<Base
+  lang={lang}
+  title={`${feature.title[lang]} — OxiNote`}
+  description={feature.description[lang]}
+  path={path}
+  altPath={altPath}
+>
+  <article class="sheet page-head">
+    <p class="kicker">{String(index + 1).padStart(2, "0")} — {feature.nav[lang]}</p>
+    <h1>{feature.title[lang]}</h1>
+    <p class="lede">{feature.lede[lang]}</p>
+
+    {feature.demo === "downloads" && <Downloads lang={lang} />}
+
+    {feature.demo === "modes" && (
+      <div class="modes reveal">
+        {feature.shots.map((shot) => (
+          <figure>
+            <img src={shot.src} alt={shot.alt[lang]} />
+            <figcaption>{shot.caption[lang]}</figcaption>
+          </figure>
+        ))}
+      </div>
+    )}
+    {feature.demo === "modes" && (
+      <p class="mode-names" aria-hidden="true">
+        <span>Live Preview</span>
+        <span>Source</span>
+        <span>{lang === "fr" ? "Lecture" : "Reading"}</span>
+      </p>
+    )}
+
+    {feature.demo === "pan" && feature.shots[0] && (
+      <figure class="shot">
+        <div class="pan reveal">
+          <img src={feature.shots[0].src} alt={feature.shots[0].alt[lang]} />
+        </div>
+        <figcaption><Rich text={feature.shots[0].caption[lang]} /></figcaption>
+      </figure>
+    )}
+
+    {feature.demo === "term" && (
+      <div class="term reveal" data-term-wrap>
+        <pre data-term>{session}</pre>
+      </div>
+    )}
+
+    {feature.id === "later" ? (
+      <dl class="planned">
+        {feature.body[lang].map((line) => {
+          const cut = line.indexOf(" — ");
+          const name = cut === -1 ? line : line.slice(0, cut);
+          const rest = cut === -1 ? "" : line.slice(cut + 3);
+          return (
+            <div>
+              <dt>
+                {name} <span class="flag">{t.planned}</span>
+              </dt>
+              <dd><Rich text={rest} /></dd>
+            </div>
+          );
+        })}
+      </dl>
+    ) : (
+      <div class="body">
+        {feature.body[lang].map((paragraph) => (
+          <p><Rich text={paragraph} /></p>
+        ))}
+      </div>
+    )}
+
+    {feature.demo !== "modes" &&
+      feature.shots.map((shot, i) => (
+        feature.demo === "pan" && i === 0 ? null : (
+          <figure class="shot reveal">
+            <img src={shot.src} alt={shot.alt[lang]} />
+            <figcaption><Rich text={shot.caption[lang]} /></figcaption>
+          </figure>
+        )
+      ))}
+    <div class="tech">
+      <p class="kicker">{t.tech}</p>
+      {feature.tech[lang].map((paragraph) => (
+        <p><Rich text={paragraph} /></p>
+      ))}
+      {feature.demo === "term" && <p>{t.sessionCaption}</p>}
+    </div>
+
+    {feature.demo === "term" && (
+      <>
+        <details class="fold">
+          <summary>{t.helpCaption}</summary>
+          <pre>{helpText}</pre>
+        </details>
+        <details class="fold">
+          <summary>{t.graphCaption}</summary>
+          <pre>{graphJson}</pre>
+        </details>
+        <details class="fold">
+          <summary>{t.tagCaption}</summary>
+          <pre>{tagHelp}</pre>
+        </details>
+        <details class="fold">
+          <summary>{t.propCaption}</summary>
+          <pre>{propHelp}</pre>
+        </details>
+      </>
+    )}
+
+    <p class="next">
+      {t.next} — <a href={featurePath(next, lang)}>{next.title[lang]}</a>
+    </p>
+  </article>
+</Base>

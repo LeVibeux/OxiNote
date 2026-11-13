@@ -1,0 +1,79 @@
+---
+import Base from "../../layouts/Base.astro";
+import Downloads from "../../components/Downloads.astro";
+import { features, ui, otherLang, type Lang } from "../../data/features";
+
+export function getStaticPaths() {
+  return (["fr", "en"] as Lang[]).map((lang) => ({
+    params: { lang },
+    props: { lang },
+  }));
+}
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = ui[lang];
+const alt = otherLang(lang);
+const title =
+  lang === "fr"
+    ? "OxiNote — Tes notes. Tes fichiers. Ton rythme."
+    : "OxiNote — Your notes. Your files. Your pace.";
+const description =
+  lang === "fr"
+    ? "OxiNote ouvre ton vault Obsidian tel quel et garde l’historique de chaque note sur ta machine."
+    : "OxiNote opens your Obsidian vault as-is and keeps every note’s history on your own machine.";
+const h1 =
+  lang === "fr"
+    ? ["Tes notes.", "Tes fichiers.", "Ton rythme."]
+    : ["Your notes.", "Your files.", "Your pace."];
+---
+
+<Base lang={lang} title={title} description={description} path={`/${lang}/`} altPath={`/${alt}/`}>
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="kicker">OxiNote 0.3.0</p>
+      <h1>
+        {h1[0]}<br />
+        {h1[1]}<br />
+        {h1[2]}
+      </h1>
+      <p class="lede">{description}</p>
+      <Downloads lang={lang} />
+    </div>
+  </section>
+  <figure class="hero-shot reveal">
+    <img
+      src="/media/live-preview-light.png"
+      alt={lang === "fr"
+        ? "Thème clair : explorateur du vault sample-vault, note Idées avec titres, cases, surlignage et callout, mentions liées à droite."
+        : "Light theme: sample-vault file tree, the Idées note with headings, checkboxes, highlight and a callout, linked mentions on the right."}
+      width="1440"
+      height="900"
+    />
+    <figcaption>
+      {lang === "fr"
+        ? "Thème clair. Fichier : crates/oxi-app/screenshots/live-preview-light.png."
+        : "Light theme. File: crates/oxi-app/screenshots/live-preview-light.png."}
+    </figcaption>
+  </figure>
+  <div class="sheet">
+    <ol class="index">
+      {features.map((feature, i) => (
+        <li class="reveal">
+          <a href={`/${lang}/${feature.slug[lang]}/`}>
+            <span class="num">{String(i + 1).padStart(2, "0")}</span>
+            <span>
+              <strong>{feature.nav[lang]}</strong>
+              <em>{feature.blurb[lang]}</em>
+            </span>
+          </a>
+        </li>
+      ))}
+    </ol>
+    <p class="next">
+      <a href="https://github.com/LeVibeux/OxiNote">{t.contribute}</a>
+    </p>
+  </div>
+</Base>

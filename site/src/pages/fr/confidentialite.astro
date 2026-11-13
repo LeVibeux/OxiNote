@@ -1,0 +1,95 @@
+---
+import Base from "../../layouts/Base.astro";
+---
+
+<Base
+  lang="fr"
+  title="Mentions légales et confidentialité — OxiNote"
+  description="Mentions légales et politique de confidentialité de la présentation privée OxiNote."
+  path="/fr/confidentialite/"
+  altPath="/en/privacy/"
+>
+  <article class="sheet page-head legal">
+    <p class="kicker">Québec · Loi sur le privé</p>
+    <h1>Mentions légales et politique de confidentialité</h1>
+    <p class="lede">Ce texte décrit cette présentation. Ce n’est pas un avis juridique.</p>
+
+    <section id="avertissement">
+      <h2>Portée</h2>
+      <p>La page est une présentation privée, en français et en anglais, pour son éditeur au Québec. Elle n’est pas offerte au public de l’Union européenne. Le RGPD et la directive ePrivacy ne sont donc pas traités ici comme le droit applicable. Si des personnes dans l’Union européenne sont ensuite invitées, il faudra reprendre l’analyse.</p>
+      <p>La Loi sur la protection des renseignements personnels dans le secteur privé (chapitre P-39.1, modifiée par la Loi 25) est le texte de référence. La LPRPDE fédérale vise les activités commerciales. Le Québec a une loi jugée essentiellement similaire pour la collecte qui reste dans la province. Le Commissariat à la protection de la vie privée du Canada indique que le traitement commercial qui traverse une frontière reste soumis à la LPRPDE. Héberger le trafic chez Cloudflare envoie des renseignements hors du Québec. À l’éditeur de qualifier l’activité.</p>
+    </section>
+
+    <section id="responsable">
+      <h2>Éditeur et responsable</h2>
+      <table>
+        <tbody>
+          <tr><th>Éditeur</th><td>LeVibeux</td></tr>
+          <tr><th>Lieu</th><td>Québec</td></tr>
+          <tr><th>Responsable de la protection des renseignements personnels</th><td>LeVibeux, l’éditeur</td></tr>
+          <tr><th>Contact</th><td><a href="https://github.com/LeVibeux">github.com/LeVibeux</a></td></tr>
+        </tbody>
+      </table>
+      <p>L’article 3.1 prévoit que la personne ayant la plus haute autorité exerce cette fonction, sauf délégation écrite. Ici, l’éditeur et le responsable sont la même personne : LeVibeux. Le contact publié est le profil GitHub ci-dessus. Il n’y a pas d’adresse postale sur cette page.</p>
+    </section>
+
+    <section id="donnees">
+      <h2>Renseignements, fins, durée</h2>
+      <p>Les fichiers ne contiennent aucun formulaire et ne demandent pas de compte OxiNote. Un script, servi par le même hôte que la page, anime la démonstration de la commande <code>oxinote</code>. Il n’ouvre aucune connexion : la politique de sécurité du contenu l’interdit (<code>connect-src 'none'</code>). Il ne dépose pas de témoin et n’écrit rien dans le navigateur. Deux catégories de renseignements peuvent apparaître une fois la page hébergée.</p>
+      <table>
+        <thead>
+          <tr><th>Renseignement</th><th>Moyen</th><th>Fin</th><th>Durée</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Adresse courriel utilisée pour le code à usage unique</td>
+            <td>Cloudflare Access, après la configuration de <code>site/DEPLOY.md</code></td>
+            <td>Vérifier que la personne autorisée peut ouvrir la page</td>
+            <td>Session Access de 24 heures. Cloudflare peut conserver une trace d’authentification selon son contrat.</td>
+          </tr>
+          <tr>
+            <td>Journaux de plateforme : adresse IP, horodatage, URL, agent utilisateur, code de réponse</td>
+            <td>Réseau Cloudflare, en tant qu’hébergeur</td>
+            <td>Acheminer la requête</td>
+            <td>Selon la conservation propre à Cloudflare. L’éditeur ne fixe pas cette durée ici.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><code>observability.enabled</code> est à <code>false</code> dans <code>site/wrangler.jsonc</code>. L’éditeur ne demande donc pas à Workers de garder des journaux ou des traces pour son compte. Cela ne supprime pas les journaux de plateforme que Cloudflare tient de son côté.</p>
+      <p>Pas de mesure d’audience, pas de publicité, pas de profil de lecture. Une fonction de ce genre, si elle était ajoutée, devrait rester éteinte tant que la personne n’a pas fait un geste clair pour l’activer (article 8.1).</p>
+      <p>L’article 8 demande d’indiquer, lors de la collecte, les fins, les moyens, les droits d’accès et de rectification, le droit de retirer le consentement, et le cas échéant les tiers et une communication hors du Québec. Cette page est ce texte.</p>
+    </section>
+
+    <section id="temoins">
+      <h2>Témoins</h2>
+      <p>La page ne dépose aucun témoin. Les polices (Fraunces, IBM Plex Mono) et le script viennent du même hôte, pas d’un autre site. Il n’y a pas de bannière : rien à accepter en plus de l’entrée.</p>
+      <p>Après une connexion Access réussie, Cloudflare dépose <code>CF_Authorization</code>. Ce témoin porte la session, ici 24 heures, pour ne pas redemander le code à chaque requête. Il est nécessaire à cette authentification. Ce n’est pas un témoin de mesure.</p>
+      <p>L’article 9.1 demande le plus haut niveau de confidentialité par défaut pour un service technologique offert au public ; son second alinéa écarte les paramètres de confidentialité d’un témoin. L’article 8.1 vise les technologies qui identifient, localisent ou profilent : elles ne s’activent pas toutes seules. La Commission d’accès à l’information décrit le même défaut pour les témoins qui profilent, identifient ou localisent.</p>
+    </section>
+
+    <section id="hebergement">
+      <h2>Hébergement</h2>
+      <p>L’hébergement retenu est Cloudflare Workers, nom <code>oxinote-prive</code>, sur le sous-domaine <code>workers.dev</code> du compte, sans nom de domaine propre. Les URL de version sont coupées (<code>preview_urls</code> à false). Cloudflare opère un réseau hors du Québec.</p>
+      <p>Avant de communiquer un renseignement personnel hors du Québec, l’article 17 exige une évaluation des facteurs relatifs à la vie privée et une entente écrite. La même exigence vaut quand on confie à quelqu’un hors du Québec la collecte, l’utilisation ou la conservation. Cette page ne tient pas lieu de cette évaluation.</p>
+    </section>
+
+    <section id="droits">
+      <h2>Droits</h2>
+      <p>La Loi sur le privé permet notamment de demander copie d’un renseignement, y compris dans un format technologique structuré lorsque l’article 27 le prévoit, de le faire rectifier (article 28), de retirer le consentement à son utilisation ou à sa communication (article 8), et, dans les cas de l’article 28.1, d’en demander la cessation de diffusion ou la désindexation.</p>
+      <p>La demande d’accès ou de rectification est écrite et adressée au responsable (article 30). Il répond par écrit, au plus tard dans les 30 jours (article 32). Un refus est motivé (article 34).</p>
+      <p>Le canal publié est le profil <a href="https://github.com/LeVibeux">github.com/LeVibeux</a>. Indiquer qu’il s’agit des renseignements personnels de la page OxiNote, et un moyen de confirmer l’identité sans envoyer une pièce complète si un moyen plus étroit suffit.</p>
+      <p>Une plainte peut aussi aller à la <a href="https://www.cai.gouv.qc.ca/">Commission d’accès à l’information du Québec</a>. Pour la LPRPDE : le <a href="https://www.priv.gc.ca/">Commissariat à la protection de la vie privée du Canada</a>.</p>
+    </section>
+
+    <section id="securite">
+      <h2>Mesures et incidents</h2>
+      <p>La page est prévue derrière Cloudflare Access (une adresse courriel, code à usage unique, session de 24 heures), sans domaine publicisé, avec une balise qui demande aux robots de ne pas l’indexer. L’article 10 demande des mesures raisonnables compte tenu de la sensibilité, de la finalité, de la quantité, de la répartition et du support.</p>
+      <p>Un incident présentant un risque de préjudice sérieux se signale à la Commission et aux personnes concernées (articles 3.5 et suivants). La personne à joindre est LeVibeux, via <a href="https://github.com/LeVibeux">github.com/LeVibeux</a>.</p>
+    </section>
+
+    <section id="maj">
+      <h2>Version de ce texte</h2>
+      <p>13 novembre 2026. Cette révision constate que la page charge un script du même hôte pour animer une démonstration, sans témoin déposé par la page et sans mesure d’audience. Une modification doit être diffusée de façon à joindre les personnes concernées (article 8.2). Le moyen prévu est le même profil GitHub.</p>
+    </section>
+  </article>
+</Base>
