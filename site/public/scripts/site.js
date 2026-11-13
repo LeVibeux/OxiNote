@@ -28,6 +28,7 @@
       }
       i = Math.min(full.length, i + step);
       live.textContent = full.slice(0, i);
+      if (box.scrollHeight > box.clientHeight) box.scrollTop = box.scrollHeight;
       if (i < full.length) window.setTimeout(tick, 14);
     }
     tick();

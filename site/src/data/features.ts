@@ -138,8 +138,8 @@ export const features: Feature[] = [
         src: "/media/live-preview-light.png",
         alt: liveAlt,
         caption: {
-          fr: "Vault d’exemple, thème clair. Fichier du dépôt : `crates/oxi-app/screenshots/live-preview-light.png`.",
-          en: "Sample vault, light theme. Repository file: `crates/oxi-app/screenshots/live-preview-light.png`.",
+          fr: "Thème clair : explorateur, note Idées, mentions liées.",
+          en: "Light theme: file tree, the Idées note, linked mentions.",
         },
       },
     ],
@@ -176,10 +176,10 @@ export const features: Feature[] = [
     },
     tech: {
       fr: [
-        "La bascule est dans l’en-tête de la note. Le fondu ci-dessus alterne trois captures du même écran : `modes-live.png`, `modes-source.png`, `modes-reading.png`. Sans mouvement, les trois images restent l’une sous l’autre.",
+        "La bascule est dans l’en-tête de la note. Le fondu alterne trois captures du même écran. Sans mouvement, les trois images restent l’une sous l’autre.",
       ],
       en: [
-        "The switch sits in the note header. The fade above alternates three captures of the same screen: `modes-live.png`, `modes-source.png`, `modes-reading.png`. Without motion, the three images stay stacked.",
+        "The switch sits in the note header. The fade alternates three captures of the same screen. Without motion, the three images stay stacked.",
       ],
     },
     demo: "modes",
@@ -251,35 +251,33 @@ export const features: Feature[] = [
     },
     tech: {
       fr: [
-        "Sur la capture du graphe, un nœud s’intitule Canvas. C’est un titre de note dans cette capture, pas le tableau blanc Canvas, qui n’est pas dans l’application.",
-        "Filtres visibles sur la capture : étiquettes, pièces jointes, fichiers existants, orphelines, groupes, forces (centre, répulsion, lien, distance).",
+        "Le panneau de filtres et de forces (étiquettes, pièces jointes, fichiers existants, orphelines, groupes) est dans la vue. Sur cette capture il est fermé : on voit les quatre notes et leurs liens.",
       ],
       en: [
-        "On the graph capture, one node is titled Canvas. That is a note title in this capture, not the Canvas whiteboard, which is not in the application.",
-        "Filters visible on the capture: tags, attachments, existing files, orphans, groups, forces (center, repulsion, link, distance).",
+        "The filter and forces panel (tags, attachments, existing files, orphans, groups) is part of the view. On this capture it is closed: the four notes and their links are what show.",
       ],
     },
     shots: [
       {
         src: "/media/graph.png",
         alt: {
-          fr: "Graphe sombre : nœuds Accueil, Idées, ObsiRust, Rust notes, 2026-10-20, Note fantôme et Canvas, avec le panneau de filtres et de forces.",
-          en: "Dark graph: nodes Accueil, Idées, ObsiRust, Rust notes, 2026-10-20, Note fantôme and Canvas, with the filter and forces panel.",
+          fr: "Graphe sombre : Brouillon, Idées, Accueil et Lecture, reliés. L’explorateur liste les mêmes notes.",
+          en: "Dark graph: Brouillon, Idées, Accueil and Lecture, linked. The file tree lists the same notes.",
         },
         caption: {
-          fr: "Graphe. Fichier : `screenshots/graph.png`. Le nœud Canvas est un titre de cette capture.",
-          en: "Graph. File: `screenshots/graph.png`. The Canvas node is a title in this capture.",
+          fr: "Quatre notes, et les liens entre elles.",
+          en: "Four notes, and the links between them.",
         },
       },
       {
         src: "/media/backlinks.png",
         alt: {
-          fr: "Note Accueil et panneau Linked mentions : extraits depuis Idées et ObsiRust, bandeau à 3 backlinks.",
-          en: "Accueil note and the Linked mentions panel: excerpts from Idées and ObsiRust, status bar at 3 backlinks.",
+          fr: "Note Accueil en Live Preview, panneau Linked mentions : extraits depuis Idées et Lecture, bandeau à 2 backlinks.",
+          en: "Accueil in Live Preview, Linked mentions panel: excerpts from Idées and Lecture, status bar at 2 backlinks.",
         },
         caption: {
-          fr: "Mentions liées. Fichier : `screenshots/backlinks.png`.",
-          en: "Linked mentions. File: `screenshots/backlinks.png`.",
+          fr: "Deux mentions liées, depuis Idées et Lecture.",
+          en: "Two linked mentions, from Idées and Lecture.",
         },
       },
     ],
@@ -318,12 +316,12 @@ export const features: Feature[] = [
       fr: [
         "Tout passe par le binaire `git` du système, dans un fil à part. L’interface ne se bloque pas dessus. Les réglages du vault sont dans `.obsidian/oxinote-git.json`.",
         "Quatre cases de `.gitignore` : ignorer la configuration `.obsidian`, les pièces jointes lourdes (`*.pdf`, `*.mp4`, `*.zip`), la corbeille, l’état de l’espace de travail.",
-        "Le défilement de la première image est une animation sur la capture `git-history.png`. Sans mouvement, l’image est entière.",
+        "Le défilement de la première image est une animation sur la capture. Sans mouvement, l’image est entière.",
       ],
       en: [
         "Everything goes through the system `git` binary, on a side thread. The interface does not block on it. Per-vault settings live in `.obsidian/oxinote-git.json`.",
         "Four `.gitignore` toggles: ignore `.obsidian` configuration, heavy attachments (`*.pdf`, `*.mp4`, `*.zip`), the trash, and the workspace state.",
-        "The pan on the first image is an animation of the capture `git-history.png`. Without motion, the whole image is shown.",
+        "The pan on the first image is an animation of the capture. Without motion, the whole image is shown.",
       ],
     },
     demo: "pan",
@@ -335,8 +333,8 @@ export const features: Feature[] = [
           en: "History of Accueil: three dated vault backup commits, comparison with the current version, an added line in green, Restore this version button.",
         },
         caption: {
-          fr: "Historique d’une note. Fichier : `crates/oxi-app/screenshots/git-history.png`.",
-          en: "History of one note. File: `crates/oxi-app/screenshots/git-history.png`.",
+          fr: "Trois commits, le diff, et le bouton pour restaurer.",
+          en: "Three commits, the diff, and the button to restore.",
         },
       },
       {
@@ -346,8 +344,8 @@ export const features: Feature[] = [
           en: "Backup (Git) window: automatic backup, interval in minutes, backup on quit, message vault backup: {{date}}, gitignore toggles.",
         },
         caption: {
-          fr: "Réglages. Fichier : `crates/oxi-app/screenshots/git-settings.png`.",
-          en: "Settings. File: `crates/oxi-app/screenshots/git-settings.png`.",
+          fr: "Sauvegarde automatique, intervalle, message de commit, gitignore.",
+          en: "Automatic backup, interval, commit message, gitignore.",
         },
       },
     ],
@@ -400,8 +398,8 @@ export const features: Feature[] = [
           en: "PDF tab test.pdf, page 1 of 3, zoom 82%, Fit to width and Open in default app buttons. The Linked mentions panel lists links to this PDF.",
         },
         caption: {
-          fr: "Lecteur en onglet. Fichier : `crates/oxi-app/screenshots/pdf-tab.png`.",
-          en: "Reader in a tab. File: `crates/oxi-app/screenshots/pdf-tab.png`.",
+          fr: "Page 1, zoom, largeur de page, ouverture dans l’application du système.",
+          en: "Page 1, zoom, fit to width, open in the system app.",
         },
       },
       {
@@ -411,8 +409,8 @@ export const features: Feature[] = [
           en: "Reading note with an embedded PDF on page 2, tooltip Open test.pdf at page 2.",
         },
         caption: {
-          fr: "Embed. Fichier : `crates/oxi-app/screenshots/pdf-embed.png`.",
-          en: "Embed. File: `crates/oxi-app/screenshots/pdf-embed.png`.",
+          fr: "Le PDF embarqué s’ouvre à la page 2.",
+          en: "The embedded PDF opens on page 2.",
         },
       },
     ],
@@ -552,6 +550,56 @@ export const features: Feature[] = [
     shots: [],
   },
 ];
+
+/** Two short lines and a link label for the home blocks. */
+export const homeLines: Record<string, Record<Lang, [string, string]>> = {
+  vault: {
+    fr: ["On désigne le dossier.", "Les notes sont déjà des fichiers Markdown."],
+    en: ["Point it at the folder.", "The notes are already Markdown files."],
+  },
+  modes: {
+    fr: ["Live Preview habille le Markdown.", "Source le montre brut, Lecture le rend."],
+    en: ["Live Preview dresses the Markdown.", "Source shows it raw, Reading renders it."],
+  },
+  graph: {
+    fr: ["Les notes se posent, les liens les retiennent.", "À côté, les mentions liées disent qui cite."],
+    en: ["Notes settle, links hold them.", "Beside them, linked mentions say who cites."],
+  },
+  git: {
+    fr: ["Le Git de la machine enregistre le vault.", "Les commits ne partent nulle part."],
+    en: ["The machine’s Git records the vault.", "The commits go nowhere else."],
+  },
+  pdf: {
+    fr: ["Un lien ouvre le PDF dans un onglet.", "Ce n’est pas un export : export écrit du HTML."],
+    en: ["A link opens the PDF in a tab.", "This is not an export: export writes HTML."],
+  },
+  cli: {
+    fr: ["Le dossier du vault est le premier argument.", "stats, search, liens, et un site HTML."],
+    en: ["The vault folder is the first argument.", "stats, search, links, and an HTML site."],
+  },
+  install: {
+    fr: ["Les fichiers sont sur la page Releases.", "Une mise à jour est comparée à SHA256SUMS.txt."],
+    en: ["The files are on the Releases page.", "An update is compared to SHA256SUMS.txt."],
+  },
+};
+
+export const homeMore: Record<Lang, string> = {
+  fr: "Lire la page",
+  en: "Read the page",
+};
+
+export const laterBand = {
+  fr: {
+    title: "Pas encore là.",
+    text: "Bases, Canvas, les citations, le Git distant.",
+    more: "La liste",
+  },
+  en: {
+    title: "Not there yet.",
+    text: "Bases, Canvas, citations, remote Git.",
+    more: "The list",
+  },
+};
 
 export function otherLang(lang: Lang): Lang {
   return lang === "fr" ? "en" : "fr";
