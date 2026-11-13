@@ -50,6 +50,10 @@ pub struct NavCache {
     card_rect: Option<Rect>,
     /// Force the hover at this fraction of the strip (screenshots).
     pub force: Option<f32>,
+    /// Was the magnifier open on the last frame (its hover zone is larger).
+    pub loupe_open: bool,
+    /// Bounds of the magnified labels drawn on the last frame.
+    labels_rect: Option<Rect>,
 }
 
 impl NavCache {
@@ -121,6 +125,28 @@ pub fn strip(panel: Rect, n: usize) -> Strip {
     }
 }
 
+/// Hover zone while the magnifier is open: the rest zone grown to the
+/// magnified ticks (`hy`: rest position of the pointer) and to the labels
+/// drawn on the last frame, so that every visible tick and title stays
+/// hoverable and clickable. Kept inside `panel` vertically.
+pub fn loupe_zone(st: &Strip, n: usize, hy: f32, labels: Option<Rect>, panel: Rect) -> Rect {
+    let ticks = loupe_layout(n, st.pitch, hy, 1.0);
+    let (Some(first), Some(last)) = (ticks.first(), ticks.last()) else {
+        return st.zone;
+    };
+    let mut zone = st.zone.union(Rect::from_min_max(
+        Pos2::new(st.zone.left(), st.top + first.top),
+        Pos2::new(st.zone.right(), st.top + last.top + last.slot),
+    ));
+    if let Some(l) = labels {
+        zone = zone.union(l);
+    }
+    Rect::from_min_max(
+        Pos2::new(zone.left(), zone.top().max(panel.top())),
+        Pos2::new(zone.right(), zone.bottom().min(panel.bottom())),
+    )
+}
+
 /// Id of the strip's interaction area.
 pub fn strip_id(tab: TabId) -> egui::Id {
     egui::Id::unique(("heading-nav", tab))
@@ -167,7 +193,12 @@ pub fn show(
     let pal = Palette::of(ui.ctx());
     let n = hs.len();
     let st = strip(panel, n);
-    let resp = ui.interact(st.zone, strip_id(tab_id), Sense::click());
+    let zone = if kind == HeadingNavigator::Loupe && caches.nav.loupe_open {
+        loupe_zone(&st, n, caches.nav.last_hy, caches.nav.labels_rect, panel)
+    } else {
+        st.zone
+    };
+    let resp = ui.interact(zone, strip_id(tab_id), Sense::click());
     let forced = caches
         .nav
         .force
@@ -209,6 +240,9 @@ pub fn show(
         HeadingNavigator::Loupe => {
             caches.nav.card_open = false;
             caches.nav.card_rect = None;
+            if !over_strip {
+                caches.nav.labels_rect = None;
+            }
             if over_strip && let Some(p) = pointer {
                 caches.nav.last_hy = p.y - st.top;
             }
@@ -221,8 +255,9 @@ pub fn show(
             let ticks = loupe_layout(n, st.pitch, hy, amount);
             let near = (amount > 0.0).then(|| model::focus(n, st.pitch, hy).round() as usize);
             paint_ticks(ui, &hs, &ticks, &st, cur, near, &pal);
+            caches.nav.loupe_open = amount > 0.0;
             if amount > 0.0 {
-                paint_labels(ui, &hs, &ticks, &st, cur, near, panel, &pal);
+                caches.nav.labels_rect = paint_labels(ui, &hs, &ticks, &st, cur, near, panel, &pal);
             }
             if amount > 0.0 && amount < 1.0 {
                 ui.ctx().request_repaint();
@@ -305,8 +340,9 @@ fn paint_labels(
     near: Option<usize>,
     panel: Rect,
     pal: &Palette,
-) {
+) -> Option<Rect> {
     let painter = ui.painter();
+    let mut bounds: Option<Rect> = None;
     let styled = has_styled_fonts(ui.ctx());
     for (i, (h, t)) in hs.iter().zip(ticks).enumerate() {
         if t.g <= 0.08 || h.text.is_empty() {
@@ -338,6 +374,7 @@ fn paint_labels(
             ),
             Pos2::new(right, y + size_g.y / 2.0 + 2.0),
         );
+        bounds = Some(bounds.map_or(rect, |b| b.union(rect)));
         painter.rect_filled(rect, 5.0, pal.bg_secondary.gamma_multiply(0.94 * opacity));
         let clipped = painter.with_clip_rect(rect.shrink2(Vec2::new(3.0, 0.0)));
         clipped.galley_with_override_text_color(
@@ -349,6 +386,7 @@ fn paint_labels(
             color.gamma_multiply(opacity),
         );
     }
+    bounds
 }
 
 /// Truncate `text` with an ellipsis so that it fits `max_w`.

@@ -682,6 +682,36 @@ fn clicking_a_heading_tick_scrolls_to_the_heading_and_moves_the_caret() {
 }
 
 #[test]
+fn the_magnifier_stays_open_over_its_magnified_ticks() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("nav-loupe-zone");
+    state(&mut app).settings.heading_navigator = crate::settings::HeadingNavigator::Loupe;
+    open_with_text(&mut app, &ctx, "Long.md", &long_note(12));
+    let tab = state(&mut app).active_tab().expect("tab").id;
+    frames(&mut app, &ctx, 3);
+    let rest = ctx
+        .read_response(heading_nav::strip_id(tab))
+        .expect("navigator drawn")
+        .rect;
+    // Hover the last tick at rest, then let the magnifier open.
+    let pos = nav_tick_pos(&ctx, tab, 12, 11);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(pos)]);
+    frames(&mut app, &ctx, 12);
+    assert!(app.caches.nav.loupe_open, "magnifier not open");
+    // Its hover zone now reaches past the rest zone (magnified bottom tick).
+    let open = ctx
+        .read_response(heading_nav::strip_id(tab))
+        .expect("navigator drawn")
+        .rect;
+    assert!(open.bottom() > rest.bottom() + 1.0, "zone did not grow");
+    // The pointer on the lowest magnified pixel keeps it open.
+    let low = egui::pos2(open.center().x, open.bottom() - 1.0);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(low)]);
+    frames(&mut app, &ctx, 15);
+    assert!(app.caches.nav.loupe_open, "magnifier closed");
+}
+
+#[test]
 fn hovering_the_ticks_opens_the_floating_outline() {
     let ctx = egui::Context::default();
     let (mut app, _dir) = real_app("nav-hover");
