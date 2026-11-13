@@ -50,13 +50,36 @@ pub struct NavCache {
     card_rect: Option<Rect>,
     /// Force the hover at this fraction of the strip (screenshots).
     pub force: Option<f32>,
-    /// Was the magnifier open on the last frame (its hover zone is larger).
-    pub loupe_open: bool,
-    /// Bounds of the magnified labels drawn on the last frame.
-    labels_rect: Option<Rect>,
+    /// Magnifier state of the last frame, per tab (several panes can show
+    /// a navigator in the same frame).
+    loupe: HashMap<TabId, Loupe>,
+}
+
+/// Magnifier state of one tab, as drawn on the last frame.
+#[derive(Default)]
+struct Loupe {
+    /// Open (its strip zone covers the magnified ticks).
+    open: bool,
+    /// Each drawn label and the heading it stands for.
+    labels: Vec<(Rect, usize)>,
 }
 
 impl NavCache {
+    /// Was the magnifier of `tab` open on the last frame?
+    pub fn loupe_open(&self, tab: TabId) -> bool {
+        self.loupe.get(&tab).is_some_and(|l| l.open)
+    }
+
+    /// Labels of the magnifier of `tab` drawn on the last frame, with the
+    /// heading each stands for.
+    #[cfg(test)]
+    pub fn loupe_labels(&self, tab: TabId) -> Vec<(Rect, usize)> {
+        self.loupe
+            .get(&tab)
+            .map(|l| l.labels.clone())
+            .unwrap_or_default()
+    }
+
     /// The headings of the note of `tab` (parsed again when the text changed).
     pub fn headings(
         &mut self,
@@ -125,22 +148,20 @@ pub fn strip(panel: Rect, n: usize) -> Strip {
     }
 }
 
-/// Hover zone while the magnifier is open: the rest zone grown to the
-/// magnified ticks (`hy`: rest position of the pointer) and to the labels
-/// drawn on the last frame, so that every visible tick and title stays
-/// hoverable and clickable. Kept inside `panel` vertically.
-pub fn loupe_zone(st: &Strip, n: usize, hy: f32, labels: Option<Rect>, panel: Rect) -> Rect {
+/// Strip zone while the magnifier is open: the rest zone grown vertically to
+/// the magnified ticks (`hy`: rest position of the pointer), so that every
+/// visible tick stays hoverable and clickable. Kept inside `panel`. The
+/// labels get their own hit regions (see [`show`]), so that the note text
+/// around them stays clickable.
+pub fn loupe_zone(st: &Strip, n: usize, hy: f32, panel: Rect) -> Rect {
     let ticks = loupe_layout(n, st.pitch, hy, 1.0);
     let (Some(first), Some(last)) = (ticks.first(), ticks.last()) else {
         return st.zone;
     };
-    let mut zone = st.zone.union(Rect::from_min_max(
+    let zone = st.zone.union(Rect::from_min_max(
         Pos2::new(st.zone.left(), st.top + first.top),
         Pos2::new(st.zone.right(), st.top + last.top + last.slot),
     ));
-    if let Some(l) = labels {
-        zone = zone.union(l);
-    }
     Rect::from_min_max(
         Pos2::new(zone.left(), zone.top().max(panel.top())),
         Pos2::new(zone.right(), zone.bottom().min(panel.bottom())),
@@ -193,18 +214,37 @@ pub fn show(
     let pal = Palette::of(ui.ctx());
     let n = hs.len();
     let st = strip(panel, n);
-    let zone = if kind == HeadingNavigator::Loupe && caches.nav.loupe_open {
-        loupe_zone(&st, n, caches.nav.last_hy, caches.nav.labels_rect, panel)
+    let loupe = kind == HeadingNavigator::Loupe;
+    let zone = if loupe && caches.nav.loupe_open(tab_id) {
+        loupe_zone(&st, n, caches.nav.last_hy, panel)
     } else {
         st.zone
     };
+    // Labels drawn on the last frame: one hit region each, only while the
+    // magnifier is open. Registered before the strip, so that the strip wins
+    // where they overlap.
+    let mut label_hover = false;
+    let mut label_click = None;
+    if loupe && let Some(l) = caches.nav.loupe.get(&tab_id).filter(|l| l.open) {
+        for (rect, i) in &l.labels {
+            let r = ui.interact(
+                *rect,
+                egui::Id::unique(("heading-nav-label", tab_id, *i)),
+                Sense::click(),
+            );
+            label_hover |= r.hovered();
+            if r.clicked() {
+                label_click = Some(*i);
+            }
+        }
+    }
     let resp = ui.interact(zone, strip_id(tab_id), Sense::click());
     let forced = caches
         .nav
         .force
         .map(|f| Pos2::new(st.zone.center().x, st.top + f * n as f32 * st.pitch));
     let pointer = forced.or_else(|| ui.input(|i| i.pointer.hover_pos()));
-    let over_strip = forced.is_some() || resp.hovered();
+    let over_strip = forced.is_some() || resp.hovered() || label_hover;
     let over_card = kind == HeadingNavigator::Floating
         && caches
             .nav
@@ -240,10 +280,11 @@ pub fn show(
         HeadingNavigator::Loupe => {
             caches.nav.card_open = false;
             caches.nav.card_rect = None;
-            if !over_strip {
-                caches.nav.labels_rect = None;
-            }
-            if over_strip && let Some(p) = pointer {
+            // Only the ticks move the magnifier: over a label it stays put.
+            if over_strip
+                && !label_hover
+                && let Some(p) = pointer
+            {
                 caches.nav.last_hy = p.y - st.top;
             }
             let amount = ui.ctx().animate_bool_with_time(
@@ -255,10 +296,18 @@ pub fn show(
             let ticks = loupe_layout(n, st.pitch, hy, amount);
             let near = (amount > 0.0).then(|| model::focus(n, st.pitch, hy).round() as usize);
             paint_ticks(ui, &hs, &ticks, &st, cur, near, &pal);
-            caches.nav.loupe_open = amount > 0.0;
-            if amount > 0.0 {
-                caches.nav.labels_rect = paint_labels(ui, &hs, &ticks, &st, cur, near, panel, &pal);
-            }
+            let labels = if amount > 0.0 {
+                paint_labels(ui, &hs, &ticks, &st, cur, near, panel, &pal)
+            } else {
+                Vec::new()
+            };
+            caches.nav.loupe.insert(
+                tab_id,
+                Loupe {
+                    open: amount > 0.0,
+                    labels,
+                },
+            );
             if amount > 0.0 && amount < 1.0 {
                 ui.ctx().request_repaint();
             }
@@ -267,6 +316,7 @@ pub fn show(
             {
                 target = hit(&ticks, p.y - st.top);
             }
+            target = target.or(label_click);
         }
     }
 
@@ -340,9 +390,9 @@ fn paint_labels(
     near: Option<usize>,
     panel: Rect,
     pal: &Palette,
-) -> Option<Rect> {
+) -> Vec<(Rect, usize)> {
     let painter = ui.painter();
-    let mut bounds: Option<Rect> = None;
+    let mut drawn = Vec::new();
     let styled = has_styled_fonts(ui.ctx());
     for (i, (h, t)) in hs.iter().zip(ticks).enumerate() {
         if t.g <= 0.08 || h.text.is_empty() {
@@ -374,7 +424,7 @@ fn paint_labels(
             ),
             Pos2::new(right, y + size_g.y / 2.0 + 2.0),
         );
-        bounds = Some(bounds.map_or(rect, |b| b.union(rect)));
+        drawn.push((rect, i));
         painter.rect_filled(rect, 5.0, pal.bg_secondary.gamma_multiply(0.94 * opacity));
         let clipped = painter.with_clip_rect(rect.shrink2(Vec2::new(3.0, 0.0)));
         clipped.galley_with_override_text_color(
@@ -386,7 +436,7 @@ fn paint_labels(
             color.gamma_multiply(opacity),
         );
     }
-    bounds
+    drawn
 }
 
 /// Truncate `text` with an ellipsis so that it fits `max_w`.
