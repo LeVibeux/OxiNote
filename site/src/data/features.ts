@@ -88,8 +88,8 @@ export interface Feature {
 }
 
 const liveAlt = {
-  fr: "Thème clair : explorateur du vault sample-vault (attachments, Journal, Projets, Templates, Accueil, Idées, Orpheline), note Idées avec titres, cases à cocher, surlignage et callout, mentions liées à droite.",
-  en: "Light theme: sample-vault file tree (attachments, Journal, Projets, Templates, Accueil, Idées, Orpheline), the Idées note with headings, checkboxes, highlight and a callout, linked mentions on the right.",
+  fr: "Thème clair : explorateur (Idées, Lecture, page.pdf), note Idées avec une liste, un callout et un surlignage, mention liée à droite.",
+  en: "Light theme: file tree (Idées, Lecture, page.pdf), the Idées note with a list, a callout and a highlight, a linked mention on the right.",
 };
 
 export const features: Feature[] = [
@@ -378,12 +378,12 @@ export const features: Feature[] = [
       {
         src: "/media/git-history.png",
         alt: {
-          fr: "Historique d’Accueil : trois commits vault backup datés, comparaison avec la version actuelle, ligne ajoutée en vert, bouton Restaurer cette version.",
-          en: "History of Accueil: three dated vault backup commits, comparison with the current version, an added line in green, Restore this version button.",
+          fr: "Historique de la note Idées : deux commits, comparaison avec la version actuelle, bouton Restaurer cette version.",
+          en: "History of the Idées note: two commits, comparison with the current version, Restore this version button.",
         },
         caption: {
-          fr: "Trois commits, le diff, et le bouton pour restaurer.",
-          en: "Three commits, the diff, and the button to restore.",
+          fr: "Deux commits, et le bouton pour restaurer.",
+          en: "Two commits, and the button to restore.",
         },
       },
       {
@@ -443,8 +443,8 @@ export const features: Feature[] = [
       {
         src: "/media/pdf-tab.png",
         alt: {
-          fr: "Onglet PDF test.pdf, page 1 sur 3, zoom 82 %, boutons Fit to width et Open in default app. Le panneau Linked mentions liste des liens vers ce PDF.",
-          en: "PDF tab test.pdf, page 1 of 3, zoom 82%, Fit to width and Open in default app buttons. The Linked mentions panel lists links to this PDF.",
+          fr: "Onglet page.pdf, page 1, zoom 102 %, boutons Fit to width et Open in default app.",
+          en: "Tab page.pdf, page 1, zoom 102%, Fit to width and Open in default app buttons.",
         },
         caption: {
           fr: "Page 1, zoom, largeur de page, ouverture dans l’application du système.",

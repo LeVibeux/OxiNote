@@ -1,23 +1,15 @@
 ---
-import "../styles/global.css";
-import Footer from "../components/Footer.astro";
+import Base from "../layouts/Base.astro";
 ---
 
-<!DOCTYPE html>
-<html lang="fr">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex, nofollow, noarchive" />
-    <title>OxiNote</title>
-    <meta name="description" content="OxiNote ouvre ton vault Obsidian tel quel et garde l’historique de chaque note sur ta machine." />
-    <link rel="icon" href="/media/icon.png" type="image/png" />
-    <link rel="alternate" hreflang="fr" href="/fr/" />
-    <link rel="alternate" hreflang="en" href="/en/" />
-    <link rel="alternate" hreflang="x-default" href="/fr/" />
-    <meta name="view-transition" content="same-origin" />
-  </head>
-  <body class="gate">
+<Base
+  lang="fr"
+  title="OxiNote"
+  description="OxiNote ouvre ton vault Obsidian tel quel et garde l’historique de chaque note sur ta machine."
+  path="/"
+  altPath="/en/"
+>
+  <div class="gate">
     <section class="hero">
       <div class="hero-copy">
         <p class="kicker">OxiNote 0.3.0</p>
@@ -29,6 +21,5 @@ import Footer from "../components/Footer.astro";
         </div>
       </div>
     </section>
-    <Footer lang="fr" />
-  </body>
-</html>
+  </div>
+</Base>
