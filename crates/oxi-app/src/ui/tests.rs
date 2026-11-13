@@ -682,6 +682,116 @@ fn clicking_a_heading_tick_scrolls_to_the_heading_and_moves_the_caret() {
 }
 
 #[test]
+fn the_magnifier_stays_open_over_its_magnified_ticks() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("nav-loupe-zone");
+    state(&mut app).settings.heading_navigator = crate::settings::HeadingNavigator::Loupe;
+    open_with_text(&mut app, &ctx, "Long.md", &long_note(12));
+    let tab = state(&mut app).active_tab().expect("tab").id;
+    frames(&mut app, &ctx, 3);
+    let rest = ctx
+        .read_response(heading_nav::strip_id(tab))
+        .expect("navigator drawn")
+        .rect;
+    // Hover the last tick at rest, then let the magnifier open.
+    let pos = nav_tick_pos(&ctx, tab, 12, 11);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(pos)]);
+    frames(&mut app, &ctx, 12);
+    assert!(app.caches.nav.loupe_open(tab), "magnifier not open");
+    // Its hover zone now reaches past the rest zone (magnified bottom tick).
+    let open = ctx
+        .read_response(heading_nav::strip_id(tab))
+        .expect("navigator drawn")
+        .rect;
+    assert!(open.bottom() > rest.bottom() + 1.0, "zone did not grow");
+    // The pointer on the lowest magnified pixel keeps it open.
+    let low = egui::pos2(open.center().x, open.bottom() - 1.0);
+    frame(&mut app, &ctx, vec![Event::PointerMoved(low)]);
+    frames(&mut app, &ctx, 15);
+    assert!(app.caches.nav.loupe_open(tab), "magnifier closed");
+}
+
+#[test]
+fn magnifier_labels_are_clickable_but_the_note_around_them_is_not_captured() {
+    let ctx = egui::Context::default();
+    let (mut app, _dir) = real_app("nav-loupe-labels");
+    state(&mut app).settings.heading_navigator = crate::settings::HeadingNavigator::Loupe;
+    let text = long_note(20);
+    open_with_text(&mut app, &ctx, "Long.md", &text);
+    let tab = state(&mut app).active_tab().expect("tab").id;
+    frames(&mut app, &ctx, 3);
+    let rest = ctx
+        .read_response(heading_nav::strip_id(tab))
+        .expect("navigator drawn")
+        .rect;
+    let press = |pos, pressed| Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    // Open the magnifier on the middle of the strip.
+    frame(
+        &mut app,
+        &ctx,
+        vec![Event::PointerMoved(nav_tick_pos(&ctx, tab, 20, 10))],
+    );
+    frames(&mut app, &ctx, 12);
+    let labels = app.caches.nav.loupe_labels(tab);
+    assert!(labels.len() > 1, "no labels: {labels:?}");
+    // A click in the note to the left of the strip, below the labels, is
+    // not taken by the navigator (a zone enclosing the strip and the labels
+    // used to catch it and jump to the last heading).
+    let left = labels
+        .iter()
+        .map(|(r, _)| r.left())
+        .fold(f32::INFINITY, f32::min);
+    let bottom = labels
+        .iter()
+        .map(|(r, _)| r.bottom())
+        .fold(f32::NEG_INFINITY, f32::max);
+    assert!(
+        bottom < rest.bottom() - 20.0,
+        "labels reach the strip's end"
+    );
+    let outside = egui::pos2(left + 4.0, rest.bottom() - 4.0);
+    frame(
+        &mut app,
+        &ctx,
+        vec![Event::PointerMoved(outside), press(outside, true)],
+    );
+    frame(&mut app, &ctx, vec![press(outside, false)]);
+    frames(&mut app, &ctx, 5);
+    assert_eq!(app.caches.nav.offsets[&tab], 0.0, "click outside jumped");
+    // Hover the strip again, move onto the first label and click it.
+    frame(
+        &mut app,
+        &ctx,
+        vec![Event::PointerMoved(nav_tick_pos(&ctx, tab, 20, 10))],
+    );
+    frames(&mut app, &ctx, 12);
+    let (rect, i) = app.caches.nav.loupe_labels(tab)[0];
+    let on = rect.center();
+    frame(&mut app, &ctx, vec![Event::PointerMoved(on)]);
+    frames(&mut app, &ctx, 3);
+    assert!(
+        app.caches.nav.loupe_open(tab),
+        "magnifier closed over a label"
+    );
+    frame(&mut app, &ctx, vec![press(on, true)]);
+    frame(&mut app, &ctx, vec![press(on, false)]);
+    frames(&mut app, &ctx, 30);
+    assert!(
+        app.caches.nav.offsets[&tab] > 100.0,
+        "label click did not jump"
+    );
+    let at = text.find(&format!("## Section {i}\n")).expect("heading");
+    let id = egui::Id::unique(("editor", tab));
+    let sel = edit::read_sel(&ctx, id, &text).expect("selection");
+    assert_eq!((sel.start, sel.end), (at, at));
+}
+
+#[test]
 fn hovering_the_ticks_opens_the_floating_outline() {
     let ctx = egui::Context::default();
     let (mut app, _dir) = real_app("nav-hover");

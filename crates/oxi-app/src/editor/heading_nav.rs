@@ -108,9 +108,15 @@ pub fn focus(n: usize, pitch: f32, hy: f32) -> f32 {
 }
 
 /// Magnifier layout: every tick gets `g = max(0, 1 - |i - focus| / REACH)`,
-/// its slot grows by `1 + ZOOM * g`, positions are accumulated and shifted
-/// so that the nearest tick stays under the pointer. `amount` (0..=1)
-/// blends between rest and fully magnified (smooth in/out).
+/// its slot grows by `1 + ZOOM * g`, and positions are accumulated.
+///
+/// The stack is anchored like the macOS Dock: the rest position `hy` of the
+/// pointer is mapped to its magnified position `M(hy)` (piecewise linear in
+/// the slots, so continuous in `hy`) and the stack is shifted by
+/// `hy - M(hy)`. The pointer therefore always stays inside the slot of the
+/// tick it designates and the ticks glide smoothly (no jump when the
+/// nearest tick changes). `amount` (0..=1) blends between rest and fully
+/// magnified (smooth in/out).
 pub fn loupe_layout(n: usize, pitch: f32, hy: f32, amount: f32) -> Vec<Tick> {
     if n == 0 {
         return Vec::new();
@@ -126,10 +132,12 @@ pub fn loupe_layout(n: usize, pitch: f32, hy: f32, amount: f32) -> Vec<Tick> {
         cum.push(acc);
         acc += s;
     }
-    let c = (f.round() as usize).min(n - 1);
-    // Shift so that the tick under the pointer stays under it (no jump);
-    // `amount` blends from the rest layout (no shift).
-    let offset = amount * (hy - (cum[c] + slots[c] / 2.0));
+    // Magnified position of the rest position `hy`.
+    let pos = hy / pitch;
+    let i = (pos.floor().max(0.0) as usize).min(n - 1);
+    let frac = (pos - i as f32).clamp(0.0, 1.0);
+    let magnified = cum[i] + frac * slots[i];
+    let offset = amount * (hy - magnified);
     (0..n)
         .map(|i| Tick {
             top: cum[i] + offset,
@@ -256,6 +264,37 @@ mod tests {
         let t = loupe_layout(8, 10.0, 40.0, 1.0);
         for w in t.windows(2) {
             assert!((w[0].top + w[0].slot - w[1].top).abs() < 1e-3);
+        }
+    }
+
+    #[test]
+    fn loupe_glides_without_jumping() {
+        let (n, p) = (12, 10.0);
+        let mut prev = loupe_layout(n, p, 0.0, 1.0);
+        let mut hy = 0.25;
+        while hy <= n as f32 * p {
+            let t = loupe_layout(n, p, hy, 1.0);
+            for (a, b) in prev.iter().zip(&t) {
+                assert!(
+                    (a.center() - b.center()).abs() < 2.0,
+                    "tick jumped at hy={hy}: {} -> {}",
+                    a.center(),
+                    b.center()
+                );
+            }
+            prev = t;
+            hy += 0.25;
+        }
+    }
+
+    #[test]
+    fn loupe_slots_stay_contiguous_and_blend_to_rest() {
+        for hy in [0.0, 7.3, 15.0, 64.9, 119.0, 500.0] {
+            let t = loupe_layout(12, 10.0, hy, 1.0);
+            for w in t.windows(2) {
+                assert!((w[0].top + w[0].slot - w[1].top).abs() < 1e-3);
+            }
+            assert_eq!(loupe_layout(12, 10.0, hy, 0.0), rest_layout(12, 10.0));
         }
     }
 

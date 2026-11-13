@@ -185,12 +185,12 @@ fn table_look(
         look.headers.insert(b.start);
         let mut rows = Vec::new();
         let mut widths = Vec::new();
-        for n in b.start..=b.end {
+        for (n, line) in decor.lines.iter().enumerate().take(b.end + 1).skip(b.start) {
             if n == b.start + 1 {
                 continue;
             }
             look.rows.insert(n);
-            let cs = blocks::cells(text, decor.lines[n].range.clone());
+            let cs = blocks::cells(text, line.range.clone());
             let font = if n == b.start {
                 styled_font(size, mono, styled, true, false)
             } else {
