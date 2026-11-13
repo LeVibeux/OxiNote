@@ -1,0 +1,3 @@
+# Présentation privée. Aucun robot ne doit indexer ces pages.
+User-agent: *
+Disallow: /
