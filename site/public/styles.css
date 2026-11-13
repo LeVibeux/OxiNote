@@ -83,13 +83,20 @@ header.site {
   text-transform: uppercase;
 }
 
-nav.toc {
+nav.toc, nav.langs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem 0.9rem;
   justify-content: flex-end;
   font-family: "Segoe UI", system-ui, sans-serif;
   font-size: 0.86rem;
+}
+
+nav.langs { gap: 0.35rem 0.55rem; }
+
+nav.langs a[aria-current="page"] {
+  color: var(--ink);
+  text-decoration: none;
 }
 
 nav.toc a { text-decoration: none; }

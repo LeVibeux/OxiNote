@@ -16,10 +16,12 @@
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "404-page"
   },
+  // Pas de journaux Worker pour l'éditeur. Les journaux de plateforme
+  // Cloudflare, eux, ne se coupent pas depuis ce fichier.
   "observability": {
-    "enabled": true,
+    "enabled": false,
     "traces": {
-      "enabled": true
+      "enabled": false
     }
   }
 }

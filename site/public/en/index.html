@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>OxiNote</title>
+  <meta name="description" content="A Markdown notes application written in Rust, compatible with existing Obsidian vaults. Description of the repository, version 0.3.0.">
+  <link rel="icon" href="/media/icon.png" type="image/png">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="alternate" hreflang="fr" href="/fr/">
+  <link rel="alternate" hreflang="en" href="/en/">
+  <link rel="alternate" hreflang="x-default" href="/fr/">
+</head>
+<body>
+  <a class="skip" href="#contenu">Skip to content</a>
+  <div class="wrap">
+    <header class="site">
+      <a class="brand" href="/en/">
+        <img src="/media/icon.png" width="52" height="52" alt="">
+        <span>
+          <strong>OxiNote</strong>
+          <span>Repository 0.3.0</span>
+        </span>
+      </a>
+      <nav class="langs" aria-label="Language">
+        <a href="/fr/" hreflang="fr" lang="fr">Français</a>
+        <a href="/en/" hreflang="en" lang="en" aria-current="page">English</a>
+      </nav>
+    </header>
+    <nav class="toc" aria-label="Sections">
+      <a href="#repo">Repository</a>
+      <a href="#install">Install</a>
+      <a href="#app">Application</a>
+      <a href="#syntax">Syntax</a>
+      <a href="#cli">CLI</a>
+      <a href="#crates">Crates</a>
+      <a href="#planned">Planned</a>
+      <a href="/en/privacy.html">Legal notice</a>
+    </nav>
+
+    <main id="contenu">
+      <div class="hero">
+        <p class="kicker">Internal overview</p>
+        <h1>OxiNote</h1>
+        <p class="lede">A Markdown notes application written in Rust. It opens an existing Obsidian vault. This page describes what version 0.3.0 of the repository does. License: MIT or Apache-2.0.</p>
+      </div>
+
+      <section id="repo">
+        <h2>The repository</h2>
+        <p>Obsidian is a proprietary application, Electron and TypeScript, with closed source. OxiNote does not modify it. <span class="path">PLAN.md</span> describes a reimplementation: the same Markdown files, the same <span class="path">.obsidian/</span> folder, and the link, embed, tag and callout syntax that folder expects.</p>
+        <p>The repository text is in French. The Cargo workspace has seven crates, from the vault on disk to the <span class="path">oxinote-app</span> and <span class="path">oxinote</span> binaries. <span class="path">docs/AGENTS.md</span> still marks <span class="path">oxi-app</span> as in progress; it marks the other six crates complete.</p>
+        <p>Out of scope for now, according to the plan: Sync, Publish, and JavaScript plugins already written for Obsidian.</p>
+      </section>
+
+      <section id="install">
+        <h2>Install and updates</h2>
+        <p>GitHub releases contain the application and the CLI. <span class="path">.github/workflows/release.yml</span> builds for:</p>
+        <ul>
+          <li>Linux x86_64</li>
+          <li>macOS Apple Silicon</li>
+          <li>macOS Intel</li>
+          <li>Windows x86_64</li>
+        </ul>
+        <p>On Ubuntu or Debian, the <span class="path">.deb</span> package adds the application to the menu and <span class="path">oxinote</span> to the terminal.</p>
+        <p>At startup the application asks the <span class="path">releases/latest</span> API at most once a day. If the tag is newer, it downloads the archive for this platform, checks it against <span class="path">SHA256SUMS.txt</span>, and replaces the installed files. The new version runs after a restart. Settings, About: “Install automatically” (the default in the code), “Notify only”, or “Off”. A <span class="path">.deb</span> install under <span class="path">/usr</span>, a folder the process cannot rewrite, or a translocated macOS app, is only reported.</p>
+        <p>To publish: set <span class="path">version</span> in <span class="path">Cargo.toml</span> (<span class="path">[workspace.package]</span>) to the same number as the tag, then run the Release workflow (<span class="path">v0.1.0</span>, or <span class="path">v0.1.0-rc.1</span> for a pre-release) or push a <span class="path">vX.Y.Z</span> tag.</p>
+      </section>
+
+      <section id="app">
+        <h2>The application</h2>
+        <p><span class="path">oxinote-app</span> is an eframe / egui interface. Writing is Live Preview or Source mode. Reading is a separate mode. The command registry covers formatting, lists, checkboxes, find and replace in the note, and folding. Heading navigation has two layouts, named in settings as a floating outline and a loupe. Typed properties are a panel at the top of the note.</p>
+        <p>Side panels show the file explorer, search, tags, backlinks, outgoing links and the outline. The quick switcher and the command palette open a note or a command. Bookmarks, daily notes and templates each have a command. Tabs sit in groups. The theme follows the system, or stays light, or dark.</p>
+        <p>Nine core plugins are read and written in <span class="path">.obsidian/core-plugins.json</span>: backlinks, bookmarks, daily notes, graph, outline, properties, tags, templates, word count. An id this code does not know is kept. The vault folder is watched; events are debounced before they are applied.</p>
+        <p>A PDF opens in a tab. The engine is hayro, in Rust, with no system library. The open comes from a link or an embed, with a page and a zoom. Git backup calls the system <span class="path">git</span> binary on a background thread: automatic commit, <span class="path">.gitignore</span>, per-note history and restore. There is no remote.</p>
+        <div class="shots">
+          <figure>
+            <img src="/media/explorer.png" alt="File explorer, two tabs of the same note, linked mentions on the right.">
+            <figcaption>Explorer, tabs, linked mentions. Repository file: <span class="path">screenshots/explorer.png</span>.</figcaption>
+          </figure>
+          <figure>
+            <img src="/media/reading.png" alt="A note in reading mode, with properties, checkboxes, a callout and embeds.">
+            <figcaption>Reading mode. File: <span class="path">screenshots/reading.png</span>.</figcaption>
+          </figure>
+          <figure>
+            <img src="/media/graph.png" alt="Link graph of the sample vault, with filters and forces.">
+            <figcaption>Graph of the sample vault. The “Canvas” node is a note in that vault, not the whiteboard editor. File: <span class="path">screenshots/graph.png</span>.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="syntax">
+        <h2>Markdown</h2>
+        <p>The parser is <span class="path">pulldown-cmark</span> (CommonMark and GFM), plus a pass for Obsidian syntax. Each kept element has a byte span in the original file, so a link can be rewritten without moving the rest.</p>
+        <p>YAML frontmatter, between <span class="path">---</span> on the first line, is converted to JSON. The code recognizes <span class="path">aliases</span> / <span class="path">alias</span>, <span class="path">tags</span> / <span class="path">tag</span>, and a value that is exactly a wikilink. It also recognizes <span class="path">[[target#subpath|label]]</span>, embeds <span class="path">![[…]]</span>, internal Markdown links, tags <span class="path">#tag/child</span>, block ids <span class="path">^id</span>, tasks, highlights <span class="path">==…==</span>, comments <span class="path">%%…%%</span>, callouts <span class="path">&gt; [!type]</span> and math. Those marks are not collected inside a code span or code block, inside math, inside an HTML comment, or inside a <span class="path">%%…%%</span> comment.</p>
+        <p>Editing a property rewrites the frontmatter and leaves the body. Types read and written in <span class="path">.obsidian/types.json</span> are text, multitext, number, checkbox, date, datetime, aliases and tags. Renaming a tag onto a name that already exists merges the two. Renaming a note or a folder updates links that point at them.</p>
+        <p>A link is resolved in this order: exact path, then a unique filename. If several files remain, the one closest to the source folder wins, then alphabetical order.</p>
+      </section>
+
+      <section id="cli">
+        <h2>The <span class="path">oxinote</span> command</h2>
+        <p>Every subcommand takes the vault folder as its first argument. Search accepts <span class="path">tag:</span>, <span class="path">path:</span>, <span class="path">file:</span>, a quoted phrase, <span class="path">-exclude</span>, <span class="path">OR</span> and <span class="path">/regex/</span>.</p>
+        <table>
+          <thead>
+            <tr><th>Command</th><th>Effect</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="path">stats</span></td><td>Notes, attachments, links, tags, orphans, words.</td></tr>
+            <tr><td><span class="path">search</span></td><td>Lines as <span class="path">path:line: text</span>, or JSON.</td></tr>
+            <tr><td><span class="path">backlinks</span>, <span class="path">links</span>, <span class="path">unresolved</span></td><td>Incoming links, outgoing links, missing targets.</td></tr>
+            <tr><td><span class="path">tags</span>, <span class="path">tag</span></td><td>Counts, tree, rename, add or remove.</td></tr>
+            <tr><td><span class="path">props</span>, <span class="path">prop</span></td><td>Vault properties; set or remove one on a note.</td></tr>
+            <tr><td><span class="path">orphans</span>, <span class="path">find</span></td><td>Notes with no links; fuzzy match on name, path or alias.</td></tr>
+            <tr><td><span class="path">graph</span></td><td>JSON or Graphviz, local graph, optional force-directed coordinates.</td></tr>
+            <tr><td><span class="path">rename</span></td><td>Moves a note and updates links. <span class="path">--dry-run</span> writes nothing.</td></tr>
+            <tr><td><span class="path">daily</span></td><td>Opens or creates the daily note and prints its path.</td></tr>
+            <tr><td><span class="path">export</span></td><td>Static HTML site. Wikilinks become relative links.</td></tr>
+          </tbody>
+        </table>
+        <pre><code>cargo test --workspace
+cargo run -p oxi-cli -- stats examples/sample-vault
+cargo run -p oxi-app -- examples/sample-vault</code></pre>
+        <p><span class="path">examples/sample-vault/</span> is used by the tests, the CLI and the application. Tests that write copy it into a temporary folder.</p>
+      </section>
+
+      <section id="crates">
+        <h2>Crates</h2>
+        <table>
+          <thead>
+            <tr><th>Crate</th><th>Role</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="path">oxi-core</span></td><td>Paths, parsed notes, links, tags, graph, read and write traits, in-memory vault.</td></tr>
+            <tr><td><span class="path">oxi-markdown</span></td><td>Parse, HTML, link rewriting, frontmatter edits.</td></tr>
+            <tr><td><span class="path">oxi-vault</span></td><td>Files, <span class="path">.obsidian</span>, trash, watcher, daily notes, templates, property types.</td></tr>
+            <tr><td><span class="path">oxi-index</span></td><td>Cache, backlinks, tags, search, rename with link updates.</td></tr>
+            <tr><td><span class="path">oxi-graph</span></td><td>Force-directed layout (Barnes-Hut), local graph, filters, color groups.</td></tr>
+            <tr><td><span class="path">oxi-cli</span></td><td><span class="path">oxinote</span> binary.</td></tr>
+            <tr><td><span class="path">oxi-app</span></td><td><span class="path">oxinote-app</span> binary. Marked in progress in the agent guide.</td></tr>
+          </tbody>
+        </table>
+        <p>Frontmatter YAML becomes a <span class="path">serde_json::Value</span>. Search is an inverted index in this repository. <span class="path">PLAN.md</span> names Tantivy as a later option, not as the engine in the tree. The workspace forbids <span class="path">unsafe</span>.</p>
+      </section>
+
+      <section id="planned">
+        <h2>Planned in PLAN.md</h2>
+        <p>The roadmap, after what the plan marks as done, is not in the application today:</p>
+        <ul>
+          <li>Bases: table views in the <span class="path">.base</span> format.</li>
+          <li>Canvas: a whiteboard in the <span class="path">.canvas</span> format.</li>
+          <li>Citations: BibTeX or Zotero, <span class="path">[@key]</span>, a reading note.</li>
+          <li>PDF, continued: text selection, text search, embeds in Live Preview, annotations. The tab reader already exists.</li>
+          <li>Remote Git: push and pull. Local backup already exists.</li>
+        </ul>
+        <p>Phase 3 of the plan also names a plugin API as Rust traits and then WASM, CSS themes and snippets, and a response-time target on 10,000 notes. The agent guide does not mark those as shipped. The light, dark and system theme is in <span class="path">settings.rs</span>; this page does not describe a CSS theme loader.</p>
+      </section>
+    </main>
+
+    <footer class="site">
+      <nav aria-label="Footer">
+        <a href="/en/privacy.html">Legal notice / Privacy</a>
+        <a href="https://github.com/LeVibeux/OxiNote">GitHub repository</a>
+      </nav>
+      <p>Static page, no script. Crawlers are asked not to index it.</p>
+    </footer>
+  </div>
+</body>
+</html>

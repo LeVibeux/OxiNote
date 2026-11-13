@@ -1,15 +1,18 @@
 # Déployer la présentation OxiNote (privé, sans domaine)
 
-Rien dans ce dossier n’a été déployé. Ne lancez pas `wrangler deploy` tant que le texte des pages et les espaces réservés de `public/confidentialite.html` ne sont pas validés.
+Rien dans ce dossier n’a été déployé. Le propriétaire déploie lui-même, après Access.
 
-Configuration choisie : **Cloudflare Workers, fichiers statiques seulement**. Pas de script Worker, pas de Cloudflare Pages, pas de domaine personnalisé. C’est le plus court chemin pour du HTML déjà construit : Wrangler envoie le dossier `public/` tel quel.
+Plateforme retenue : **Cloudflare Workers**, fichiers statiques, nom `oxinote-prive`, `workers_dev` vrai (l’adresse privée `*.workers.dev`), `preview_urls` faux, pas de domaine personnalisé. `observability.enabled` est faux : ce fichier ne demande pas de journaux Worker. Pages n’est pas le chemin retenu ; la procédure est gardée en bas, pour mémoire.
+
+Pages du site : `/` propose les deux langues, `/fr/` et `/en/` sont les textes. Les liens `hreflang` sont en chemin depuis la racine, parce que le nom d’hôte `workers.dev` n’est pas encore choisi.
 
 Fichiers :
 
 | Fichier | Rôle |
 |---|---|
-| `wrangler.jsonc` | Nom `oxinote-prive`, `assets.directory` = `./public`, `preview_urls` = false, observabilité activée |
-| `public/` | HTML, CSS, images, `robots.txt`, `_headers` |
+| `wrangler.jsonc` | Nom `oxinote-prive`, `workers_dev` true, `preview_urls` false, `observability.enabled` false, `assets.directory` = `./public` |
+| `public/fr/`, `public/en/` | HTML français et anglais, y compris une `404.html` par langue |
+| `public/` | Choix de langue, CSS, images, `robots.txt`, `_headers`, `404.html` de repli |
 | `DEPLOY.md` | Ce guide. Il n’est pas dans `public/`, donc il n’est pas publié |
 
 Documentation utilisée :
@@ -25,10 +28,10 @@ Le champ de configuration s’appelle encore `preview_urls`. La documentation ac
 
 ## Avant le premier déploiement
 
-1. Remplacer dans `public/confidentialite.html` : `<NOM_EDITEUR>`, `<ADRESSE_QUEBEC>`, `<NOM_RESPONSABLE>`, `<TITRE_RESPONSABLE>`, `<COURRIEL_CONTACT>`, `<DUREE_SESSION_ACCESS>`, `<DUREE_JOURNAUX>`.
-2. Choisir le nom du Worker. `oxinote-prive` est un nom proposé, pas un compte existant. L’adresse sera `https://oxinote-prive.<sous-domaine-du-compte>.workers.dev`. Pour un autre nom, modifier `"name"` dans `wrangler.jsonc` (63 caractères maximum, lettres, chiffres, tirets, sans tiret en bout).
+1. L’éditeur et le responsable de la protection des renseignements personnels sont LeVibeux. Le contact public est https://github.com/LeVibeux. Le lieu indiqué est le Québec. La durée de session Access est 24 heures. Ces valeurs sont déjà dans les deux pages. Le seul espace réservé restant est `<ARNAUD_EMAIL>`, dans ce guide : l’adresse autorisée par Access. Elle ne figure pas dans `public/`.
+2. Le nom du Worker est `oxinote-prive`. L’adresse sera `https://oxinote-prive.<sous-domaine-du-compte>.workers.dev`.
 3. Faire l’évaluation de l’article 17 de la Loi sur le privé avant d’envoyer un renseignement personnel à Cloudflare, ou décider de ne pas déployer. Voir la page confidentialité. Ce guide ne la fait pas à votre place.
-4. Vérifier en local : `python3 -m http.server --directory public 4173`, puis ouvrir `http://127.0.0.1:4173/`.
+4. Vérifier en local : `python3 -m http.server --directory public 4173`, puis ouvrir `http://127.0.0.1:4173/fr/` et `http://127.0.0.1:4173/en/`.
 
 ## Déployer (quand vous l’aurez décidé)
 
@@ -69,19 +72,19 @@ Le courriel du code part de `noreply@notify.cloudflare.com`. S’il n’arrive p
 
 ### 3. Protéger ce Worker, production et previews
 
-1. **Workers & Pages** → `oxinote-prive` (ou le nom choisi).
+1. **Workers & Pages** → `oxinote-prive`.
 2. Onglet **Access** → **Protect this Worker behind Access**.
 3. Portée : **All traffic** (production et déploiements de prévisualisation). Ne pas choisir « Previews only » : l’adresse de production resterait ouverte.
 4. Politique d’authentification : créer une politique **Allow** dont la seule inclusion est **Emails** = `<ARNAUD_EMAIL>`. Une seule adresse, pas un domaine entier.
 5. Méthode de connexion exigée : **One-time PIN** (règle Require sur ce fournisseur, pas une inclusion ouverte à n’importe quel courriel). La documentation Access prévient qu’un Include « One-time PIN » sans liste d’adresses laisse entrer toute personne qui reçoit un code.
-6. Vérifier la durée de session et la reporter dans `<DUREE_SESSION_ACCESS>` de la page confidentialité.
+6. Durée de session : **24 heures**. C’est la durée déjà écrite dans les pages confidentialité.
 7. **Apply Access**.
 
 Chemin équivalent, si l’écran diffère : **Settings** → **Domains & Routes** → **Enable Cloudflare Access** sur `workers.dev` **et** sur les Version URLs, puis **Manage Cloudflare Access** pour restreindre l’adresse. Les URL de prévisualisation partagent souvent une politique de compte nommée « Cloudflare Workers Preview URLs » : cette politique doit, elle aussi, n’autoriser que `<ARNAUD_EMAIL>`. Ne pas activer « Protect all Workers » sauf si vous voulez le même verrou sur tous les Workers du compte, présents et futurs.
 
 Contrôle après coup : en navigation privée, l’adresse doit afficher la page de connexion Access, pas le HTML. Une autre adresse courriel doit être refusée. `<ARNAUD_EMAIL>` reçoit un code et arrive sur la page.
 
-Le témoin `CF_Authorization` est alors déposé par Access. Il est nécessaire à la session. La page ne dépose rien d’autre. Détail dans `public/confidentialite.html`.
+Le témoin `CF_Authorization` est alors déposé par Access. Il est nécessaire à la session. La page ne dépose rien d’autre. Détail dans `public/fr/confidentialite.html` et `public/en/privacy.html`. `<ARNAUD_EMAIL>` ne doit pas être recopié dans ces pages.
 
 API équivalente, si vous préférez ne pas cliquer (remplacer les identifiants, ne pas coller le jeton dans un dépôt) :
 
@@ -117,9 +120,9 @@ Le schéma exact des politiques et de la méthode de connexion est dans l’[API
 
 Pour tout couper : remettre `preview_urls` à `false` et Disable dans le tableau de bord.
 
-## Pages, si vous changez d’avis
+## Pages — non retenu
 
-Workers statiques évitent un second produit. Si vous préférez Cloudflare Pages :
+La plateforme retenue est Workers. La procédure Pages reste ici si le choix était rouvert :
 
 1. Créer un projet Pages dont le dossier publié est `site/public`. Pas de commande de build.
 2. Ne pas ajouter de domaine personnalisé. L’adresse sera `https://<projet>.pages.dev`.

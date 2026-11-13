@@ -4,206 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>OxiNote — présentation interne</title>
-  <meta name="description" content="Présentation privée d'OxiNote, application de notes Markdown écrite en Rust, compatible avec les vaults Obsidian.">
-  <link rel="icon" href="media/icon.png" type="image/png">
-  <link rel="stylesheet" href="styles.css">
+  <title>OxiNote</title>
+  <link rel="icon" href="/media/icon.png" type="image/png">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="alternate" hreflang="fr" href="/fr/">
+  <link rel="alternate" hreflang="en" href="/en/">
+  <link rel="alternate" hreflang="x-default" href="/fr/">
 </head>
 <body>
-  <a class="skip" href="#contenu">Aller au contenu</a>
   <div class="wrap">
-    <header class="site">
-      <a class="brand" href="index.html">
-        <img src="media/icon.png" width="52" height="52" alt="">
-        <span>
-          <strong>OxiNote</strong>
-          <span>Présentation interne</span>
-        </span>
-      </a>
-      <nav class="toc" aria-label="Sections">
-        <a href="#projet">Projet</a>
-        <a href="#application">Application</a>
-        <a href="#syntaxe">Syntaxe</a>
-        <a href="#cli">CLI</a>
-        <a href="#architecture">Architecture</a>
-        <a href="#suite">Suite</a>
-        <a href="confidentialite.html">Confidentialité</a>
-      </nav>
-    </header>
-
-    <main id="contenu">
-      <div class="hero">
-        <p class="kicker">Dossier de travail · dépôt version 0.3.0</p>
-        <h1>Des notes Markdown, en Rust, sur un vault déjà là.</h1>
-        <p class="lede">OxiNote est une application de notes Markdown écrite en Rust, compatible avec les vaults Obsidian existants. Cette page décrit ce que le dépôt contient. Elle n’annonce pas de service public.</p>
-        <dl class="facts">
-          <div>
-            <dt>Version</dt>
-            <dd>0.3.0</dd>
-          </div>
-          <div>
-            <dt>Licence</dt>
-            <dd>MIT ou Apache-2.0</dd>
-          </div>
-          <div>
-            <dt>Interface</dt>
-            <dd>eframe / egui</dd>
-          </div>
-          <div>
-            <dt>Binaires</dt>
-            <dd>oxinote-app, oxinote</dd>
-          </div>
-        </dl>
-      </div>
-
-      <section id="projet">
-        <h2>Ce que c’est</h2>
-        <p>Obsidian est une application propriétaire (Electron et TypeScript, code source fermé). OxiNote ne la modifie pas : le plan du dépôt décrit une réimplémentation en Rust qui reste compatible avec un vault existant — mêmes fichiers Markdown, même syntaxe de liens, d’embeds, d’étiquettes et de callouts, même dossier <span class="path">.obsidian/</span>.</p>
-        <p>Le dépôt est rédigé en français. Le workspace Cargo regroupe sept crates, de la lecture du vault jusqu’à l’application de bureau et à l’outil en ligne de commande.</p>
-        <div class="note">
-          <p>Hors périmètre, pour l’instant, selon le plan : les services payants Sync et Publish, et la compatibilité avec les plugins JavaScript existants.</p>
-        </div>
-      </section>
-
-      <section id="installation">
-        <h2>Installation et mises à jour</h2>
-        <p>Le README indique de télécharger l’archive du système dans les publications GitHub. Le workflow de release compile l’application et le CLI pour Linux x86_64, macOS Apple Silicon, macOS Intel et Windows x86_64. Sur Ubuntu ou Debian, un paquet <span class="path">.deb</span> installe l’application dans le menu et la commande <span class="path">oxinote</span>.</p>
-        <p>Au démarrage, OxiNote interroge au plus une fois par jour l’API des publications GitHub. Si une version plus récente existe, l’archive de la plateforme est téléchargée, comparée au fichier <span class="path">SHA256SUMS.txt</span>, puis installée ; elle s’applique au redémarrage. Les réglages About proposent « Installer automatiquement » (valeur par défaut), « Me prévenir seulement » ou « Désactivées ». Une installation <span class="path">.deb</span> sous <span class="path">/usr</span>, un dossier non modifiable ou une application macOS transloquée est seulement signalée.</p>
-        <p>Pour publier : aligner <span class="path">version</span> dans <span class="path">Cargo.toml</span> (<span class="path">[workspace.package]</span>), puis lancer le workflow Release avec le même numéro (<span class="path">v0.1.0</span>, ou <span class="path">v0.1.0-rc.1</span> pour une pré-version) ou pousser un tag <span class="path">vX.Y.Z</span>.</p>
-      </section>
-
-      <section id="application">
-        <h2>L’application de bureau</h2>
-        <p>Le binaire <span class="path">oxinote-app</span> est une interface native eframe / egui. Le guide des agents marque cette crate « en cours » ; le code et les captures du dépôt montrent déjà les pièces suivantes.</p>
-        <div class="columns">
-          <div>
-            <h3>Écrire et lire</h3>
-            <ul>
-              <li>Modes Live Preview, Source et Lecture.</li>
-              <li>Mise en forme, listes, cases à cocher, recherche et remplacement dans la note, pliage.</li>
-              <li>Navigation par titres : sommaire flottant ou loupe.</li>
-              <li>Panneau des propriétés typées en tête de note.</li>
-            </ul>
-            <h3>Retrouver</h3>
-            <ul>
-              <li>Explorateur de fichiers, recherche, étiquettes, backlinks, liens sortants, plan.</li>
-              <li>Basculeur rapide et palette de commandes.</li>
-              <li>Signets, notes quotidiennes, modèles.</li>
-            </ul>
-          </div>
-          <div>
-            <h3>Espace de travail</h3>
-            <ul>
-              <li>Onglets et groupes de panneaux.</li>
-              <li>Thème système, clair ou sombre.</li>
-              <li>Plugins de cœur activables : backlinks, signets, notes quotidiennes, graphe, plan, propriétés, étiquettes, modèles, nombre de mots. Les identifiants inconnus de <span class="path">core-plugins.json</span> sont conservés.</li>
-              <li>Surveillance du dossier du vault, avec temporisation.</li>
-            </ul>
-            <h3>PDF et Git local</h3>
-            <ul>
-              <li>Lecteur PDF (moteur hayro, pur Rust) en onglet, ouvert depuis un lien ou un embed, avec page et zoom.</li>
-              <li>Sauvegarde Git locale via le binaire <span class="path">git</span> du système : commit automatique, <span class="path">.gitignore</span>, historique par note et restauration. Pas de dépôt distant.</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="shots">
-          <figure>
-            <img src="media/explorer.png" alt="Deux notes ouvertes côte à côte, explorateur à gauche et mentions liées à droite.">
-            <figcaption>Explorateur, onglets et mentions liées. Capture du dépôt, <span class="path">screenshots/explorer.png</span>.</figcaption>
-          </figure>
-          <figure>
-            <img src="media/reading.png" alt="Note Idées en mode lecture, avec propriétés, cases à cocher, callout et embeds.">
-            <figcaption>Mode lecture : propriétés, tâches, callout, embeds et backlinks. <span class="path">screenshots/reading.png</span>.</figcaption>
-          </figure>
-          <figure>
-            <img src="media/graph.png" alt="Graphe de liens du vault d’exemple, avec filtres et forces réglables.">
-            <figcaption>Graphe global du vault d’exemple, filtres et forces. Le nœud « Canvas » est une note du vault, pas la fonction tableau blanc. <span class="path">screenshots/graph.png</span>.</figcaption>
-          </figure>
-        </div>
-      </section>
-
-      <section id="syntaxe">
-        <h2>Markdown reconnu</h2>
-        <p>Le parseur s’appuie sur CommonMark et GFM (<span class="path">pulldown-cmark</span>), avec un traitement maison pour la syntaxe Obsidian. Les positions sont des intervalles d’octets dans le fichier d’origine, pour réécrire les liens sans déplacer le reste.</p>
-        <ul>
-          <li>Frontmatter YAML entre <span class="path">---</span>, converti en JSON. Les clés <span class="path">aliases</span> / <span class="path">alias</span>, <span class="path">tags</span> / <span class="path">tag</span>, et une valeur qui est un wikilink entier.</li>
-          <li>Wikilinks <span class="path">[[cible#sous-partie|libellé]]</span>, embeds <span class="path">![[…]]</span>, liens et images Markdown internes.</li>
-          <li>Étiquettes imbriquées <span class="path">#tag/enfant</span>, identifiants de bloc <span class="path">^id</span>, tâches, surlignage <span class="path">==…==</span>, commentaires <span class="path">%%…%%</span>, callouts <span class="path">&gt; [!type]</span>, mathématiques.</li>
-        </ul>
-        <p>Rien de cela n’est relevé dans un span de code, un bloc de code, les mathématiques, un commentaire HTML ou un commentaire <span class="path">%%…%%</span>.</p>
-        <p>Les propriétés s’éditent en préservant le reste du fichier. Les types lus et écrits dans <span class="path">.obsidian/types.json</span> sont : text, multitext, number, checkbox, date, datetime, aliases, tags. Le CLI et l’index listent les propriétés du vault, renomment ou fusionnent une étiquette, et mettent à jour les liens quand une note ou un dossier est renommé.</p>
-        <p>La résolution des liens suit les règles décrites dans le plan : chemin exact, puis nom de fichier unique ; en cas d’ambiguïté, le fichier le plus proche du dossier source, puis l’ordre alphabétique.</p>
-      </section>
-
-      <section id="cli">
-        <h2>L’outil <span class="path">oxinote</span></h2>
-        <p>Chaque sous-commande prend le dossier du vault en premier argument. La recherche reprend la syntaxe Obsidian : <span class="path">tag:</span>, <span class="path">path:</span>, <span class="path">file:</span>, une phrase entre guillemets, <span class="path">-exclure</span>, <span class="path">OR</span>, et une expression <span class="path">/regex/</span>.</p>
-        <table>
-          <thead>
-            <tr><th>Commande</th><th>Rôle</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><span class="path">stats</span></td><td>Notes, pièces jointes, liens, étiquettes, orphelines, mots.</td></tr>
-            <tr><td><span class="path">search</span></td><td>Recherche plein texte, sortie <span class="path">chemin:ligne: texte</span> ou JSON.</td></tr>
-            <tr><td><span class="path">backlinks</span>, <span class="path">links</span>, <span class="path">unresolved</span></td><td>Liens entrants, liens sortants résolus ou non, cibles absentes.</td></tr>
-            <tr><td><span class="path">tags</span>, <span class="path">tag</span></td><td>Comptage, arbre, renommage, ajout ou retrait sur une note.</td></tr>
-            <tr><td><span class="path">props</span>, <span class="path">prop</span></td><td>Liste des propriétés et de leurs valeurs ; écriture ou suppression dans le frontmatter.</td></tr>
-            <tr><td><span class="path">orphans</span>, <span class="path">find</span></td><td>Notes sans lien ; recherche floue par nom, chemin ou alias.</td></tr>
-            <tr><td><span class="path">graph</span></td><td>Graphe JSON ou Graphviz, graphe local, disposition force-directed en option.</td></tr>
-            <tr><td><span class="path">rename</span></td><td>Renomme ou déplace une note et met à jour les liens, avec <span class="path">--dry-run</span>.</td></tr>
-            <tr><td><span class="path">daily</span></td><td>Ouvre ou crée la note du jour et affiche son chemin.</td></tr>
-            <tr><td><span class="path">export</span></td><td>Exporte le vault en site HTML statique (wikilinks vers des liens relatifs).</td></tr>
-          </tbody>
-        </table>
-        <pre><code>cargo test --workspace
-cargo run -p oxi-cli -- stats examples/sample-vault
-cargo run -p oxi-app -- examples/sample-vault</code></pre>
-        <p>Le vault <span class="path">examples/sample-vault/</span> sert aux tests, au CLI et à l’application. Les tests qui écrivent en font une copie temporaire.</p>
-      </section>
-
-      <section id="architecture">
-        <h2>Architecture</h2>
-        <table>
-          <thead>
-            <tr><th>Crate</th><th>Rôle dans le dépôt</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><span class="path">oxi-core</span></td><td>Types partagés : chemins, notes analysées, liens, étiquettes, graphe, traits de lecture et d’écriture, vault en mémoire.</td></tr>
-            <tr><td><span class="path">oxi-markdown</span></td><td>Analyse, rendu HTML, réécriture des liens, édition du frontmatter.</td></tr>
-            <tr><td><span class="path">oxi-vault</span></td><td>Fichiers, configuration <span class="path">.obsidian</span>, corbeille, surveillance, notes quotidiennes, modèles, types de propriétés.</td></tr>
-            <tr><td><span class="path">oxi-index</span></td><td>Cache de métadonnées, backlinks, étiquettes, recherche, renommage avec mise à jour des liens.</td></tr>
-            <tr><td><span class="path">oxi-graph</span></td><td>Disposition force-directed (répulsion Barnes-Hut, ressorts, centre, amortissement), graphe local, filtres, groupes de couleurs.</td></tr>
-            <tr><td><span class="path">oxi-cli</span></td><td>Binaire <span class="path">oxinote</span>.</td></tr>
-            <tr><td><span class="path">oxi-app</span></td><td>Binaire <span class="path">oxinote-app</span>. Marquée « en cours » dans le guide des agents.</td></tr>
-          </tbody>
-        </table>
-        <p>Le frontmatter YAML est converti en <span class="path">serde_json::Value</span>. L’index de recherche est un index inversé écrit pour le projet ; le plan indique que Tantivy reste une piste ultérieure, pas le moteur en place. Le code Rust du workspace interdit <span class="path">unsafe</span>.</p>
-      </section>
-
-      <section id="suite">
-        <h2>Prévu, pas encore là</h2>
-        <div class="planned">
-          <p>La section « feuille de route » de <span class="path">PLAN.md</span> liste, après ce qui est marqué fait, les fonctions suivantes. Elles ne sont pas présentées comme disponibles.</p>
-        </div>
-        <ul>
-          <li><strong>Bases.</strong> Vues tableau filtrées et triées par propriétés, éditables, au format <span class="path">.base</span>.</li>
-          <li><strong>Canvas.</strong> Tableau blanc de cartes, notes, images et liens, format <span class="path">.canvas</span>.</li>
-          <li><strong>Citations.</strong> Import BibTeX ou Zotero, autocomplétion <span class="path">[@clé]</span>, note de lecture.</li>
-          <li><strong>PDF, suite.</strong> Sélection et recherche de texte, embeds PDF dans le Live Preview, annotations. Le lecteur en onglet, lui, est déjà dans l’application.</li>
-          <li><strong>Git, suite.</strong> Dépôt distant optionnel (push et pull). La sauvegarde locale est déjà dans l’application.</li>
-        </ul>
-        <p>Le plan de phase 3 citait aussi une API de plugins (traits Rust, puis WASM), des thèmes et des snippets CSS, ainsi qu’un objectif de performance sur un vault de 10&nbsp;000 notes. Le guide des agents ne les marque pas comme livrés ; cette page ne les compte pas parmi les fonctions en place. Le thème clair, sombre ou système existe, sans chargeur de thème CSS décrit ici.</p>
-      </section>
+    <main class="hero">
+      <p class="kicker">Présentation interne</p>
+      <h1>OxiNote</h1>
+      <p class="lede">Deux versions du même texte. Le français est la langue du dépôt, et la page par défaut.</p>
+      <p><a href="/fr/" hreflang="fr" lang="fr">Français</a></p>
+      <p><a href="/en/" hreflang="en" lang="en">English</a></p>
     </main>
-
-    <footer class="site">
-      <nav aria-label="Pied de page">
-        <a href="confidentialite.html">Mentions légales / Politique de confidentialité</a>
-        <a href="https://github.com/LeVibeux/OxiNote">Dépôt GitHub</a>
-      </nav>
-      <p>Page statique, sans script et sans mesure d’audience. Elle ne doit pas être indexée. Licence du logiciel : MIT ou Apache-2.0, au choix.</p>
-    </footer>
   </div>
 </body>
 </html>
