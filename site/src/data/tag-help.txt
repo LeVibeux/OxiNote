@@ -1,0 +1,13 @@
+Rename tags across the vault, or add / remove a tag on a note
+
+Usage: oxinote tag <COMMAND>
+
+Commands:
+  rename  Rename a tag (and its nested children) in every note, inline and in frontmatter
+  add     Add a tag to a note's frontmatter `tags` list
+  rm      Remove a tag from a note (frontmatter list and inline `#tag` occurrences)
+  help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version

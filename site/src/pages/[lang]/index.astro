@@ -1,0 +1,160 @@
+---
+import Base from "../../layouts/Base.astro";
+import Downloads from "../../components/Downloads.astro";
+import NavDemo from "../../components/NavDemo.astro";
+import {
+  features,
+  ui,
+  otherLang,
+  homeLines,
+  homeMore,
+  laterBand,
+  featurePath,
+  type Lang,
+} from "../../data/features";
+import session from "../../data/session.txt?raw";
+
+export function getStaticPaths() {
+  return (["fr", "en"] as Lang[]).map((lang) => ({
+    params: { lang },
+    props: { lang },
+  }));
+}
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const alt = otherLang(lang);
+const title =
+  lang === "fr"
+    ? "OxiNote — Tes notes. Tes fichiers. Ton rythme."
+    : "OxiNote — Your notes. Your files. Your pace.";
+const description =
+  lang === "fr"
+    ? "OxiNote ouvre ton vault Obsidian tel quel et garde l’historique de chaque note sur ta machine."
+    : "OxiNote opens your Obsidian vault as-is and keeps every note’s history on your own machine.";
+const h1 =
+  lang === "fr"
+    ? ["Tes notes.", "Tes fichiers.", "Ton rythme."]
+    : ["Your notes.", "Your files.", "Your pace."];
+
+const order = ["nav", "vault", "modes", "graph", "git", "pdf", "cli", "install"] as const;
+const blocks = order.map((id) => features.find((feature) => feature.id === id)!);
+const later = features.find((feature) => feature.id === "later")!;
+const band = laterBand[lang];
+
+const modeNames =
+  lang === "fr"
+    ? ["Live Preview", "Source", "Lecture"]
+    : ["Live Preview", "Source", "Reading"];
+---
+
+<Base lang={lang} title={title} description={description} path={`/${lang}/`} altPath={`/${alt}/`}>
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="kicker">OxiNote 0.3.0</p>
+      <h1>
+        {h1[0]}<br />
+        {h1[1]}<br />
+        {h1[2]}
+      </h1>
+      <p class="lede">{description}</p>
+      <Downloads lang={lang} />
+    </div>
+  </section>
+
+  {
+    blocks.map((feature) => {
+      const lines = homeLines[feature.id][lang];
+      const href = featurePath(feature, lang);
+      const copy = (
+        <div class="home-copy">
+          <h2>{feature.title[lang]}</h2>
+          <p>{lines[0]}</p>
+          <p>{lines[1]}</p>
+          <p class="home-more"><a href={href}>{homeMore[lang]}</a></p>
+        </div>
+      );
+
+      if (feature.id === "nav") {
+        return (
+          <section class="home-block reveal">
+            <NavDemo label={feature.lede[lang]} />
+            {copy}
+          </section>
+        );
+      }
+
+      if (feature.id === "vault") {
+        const shot = feature.shots[0];
+        return (
+          <section class="home-block reveal">
+            <figure class="home-full">
+              <img src={shot.src} alt={shot.alt[lang]} />
+              <figcaption>{shot.caption[lang]}</figcaption>
+            </figure>
+            {copy}
+          </section>
+        );
+      }
+
+      if (feature.id === "modes") {
+        return (
+          <section class="home-block reveal">
+            {copy}
+            <div class="triptych">
+              {feature.shots.map((shot, i) => (
+                <figure>
+                  <img src={shot.src} alt={shot.alt[lang]} />
+                  <figcaption>{modeNames[i]}</figcaption>
+                </figure>
+              ))}
+            </div>
+          </section>
+        );
+      }
+
+      if (feature.id === "cli") {
+        return (
+          <section class="home-block reveal">
+            {copy}
+            <div class="term term-window">
+              <pre data-term>{session}</pre>
+            </div>
+          </section>
+        );
+      }
+
+      if (feature.id === "install") {
+        return (
+          <section class="home-split reveal">
+            {copy}
+            <Downloads lang={lang} />
+          </section>
+        );
+      }
+
+      const shot = feature.shots[0];
+      const flip = feature.id === "git";
+      return (
+        <section class:list={["home-split", "reveal", flip && "flip"]}>
+          {copy}
+          <figure class={feature.id === "git" ? "pan home-pan" : "shot"}>
+            <img src={shot.src} alt={shot.alt[lang]} />
+            <figcaption>{shot.caption[lang]}</figcaption>
+          </figure>
+        </section>
+      );
+    })
+  }
+
+  <aside class="later-band">
+    <div class="hero-copy">
+      <p class="stamp">{lang === "fr" ? "prévu" : "planned"}</p>
+      <h2>{band.title}</h2>
+      <p class="lede">{band.text}</p>
+      <p class="home-more"><a href={featurePath(later, lang)}>{band.more}</a></p>
+    </div>
+  </aside>
+</Base>

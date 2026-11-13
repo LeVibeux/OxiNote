@@ -12,7 +12,7 @@
   // https://developers.cloudflare.com/workers/versions-and-deployments/version-urls/
   "preview_urls": false,
   "assets": {
-    "directory": "./public",
+    "directory": "./dist",
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "404-page"
   },

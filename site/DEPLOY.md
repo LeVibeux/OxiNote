@@ -4,15 +4,25 @@ Rien dans ce dossier n’a été déployé. Le propriétaire déploie lui-même,
 
 Plateforme retenue : **Cloudflare Workers**, fichiers statiques, nom `oxinote-prive`, `workers_dev` vrai (l’adresse privée `*.workers.dev`), `preview_urls` faux, pas de domaine personnalisé. `observability.enabled` est faux : ce fichier ne demande pas de journaux Worker. Pages n’est pas le chemin retenu ; la procédure est gardée en bas, pour mémoire.
 
-Pages du site : `/` propose les deux langues, `/fr/` et `/en/` sont les textes. Les liens `hreflang` sont en chemin depuis la racine, parce que le nom d’hôte `workers.dev` n’est pas encore choisi.
+Pages du site : `/` propose les deux langues, `/fr/` et `/en/` sont les textes, puis une page par sujet. Les liens `hreflang` sont en chemin depuis la racine, parce que le nom d’hôte `workers.dev` n’est pas encore choisi.
+
+Le HTML publié est produit en local, il n’est pas commité :
+
+```sh
+npm ci
+npm run build
+```
+
+Cela écrit `site/dist/`. `wrangler.jsonc` pointe `assets.directory` sur `./dist`.
 
 Fichiers :
 
 | Fichier | Rôle |
 |---|---|
-| `wrangler.jsonc` | Nom `oxinote-prive`, `workers_dev` true, `preview_urls` false, `observability.enabled` false, `assets.directory` = `./public` |
-| `public/fr/`, `public/en/` | HTML français et anglais, y compris une `404.html` par langue |
-| `public/` | Choix de langue, CSS, images, `robots.txt`, `_headers`, `404.html` de repli |
+| `wrangler.jsonc` | Nom `oxinote-prive`, `workers_dev` true, `preview_urls` false, `observability.enabled` false, `assets.directory` = `./dist` |
+| `src/` | Pages Astro, français et anglais |
+| `public/` | Images, polices OFL, `robots.txt`, `_headers`, script local |
+| `dist/` | Sortie de `npm run build`. C’est le dossier publié. Il n’est pas commité |
 | `DEPLOY.md` | Ce guide. Il n’est pas dans `public/`, donc il n’est pas publié |
 
 Documentation utilisée :
@@ -31,7 +41,7 @@ Le champ de configuration s’appelle encore `preview_urls`. La documentation ac
 1. L’éditeur et le responsable de la protection des renseignements personnels sont LeVibeux. Le contact public est https://github.com/LeVibeux. Le lieu indiqué est le Québec. La durée de session Access est 24 heures. Ces valeurs sont déjà dans les deux pages. Le seul espace réservé restant est `<ARNAUD_EMAIL>`, dans ce guide : l’adresse autorisée par Access. Elle ne figure pas dans `public/`.
 2. Le nom du Worker est `oxinote-prive`. L’adresse sera `https://oxinote-prive.<sous-domaine-du-compte>.workers.dev`.
 3. Faire l’évaluation de l’article 17 de la Loi sur le privé avant d’envoyer un renseignement personnel à Cloudflare, ou décider de ne pas déployer. Voir la page confidentialité. Ce guide ne la fait pas à votre place.
-4. Vérifier en local : `python3 -m http.server --directory public 4173`, puis ouvrir `http://127.0.0.1:4173/fr/` et `http://127.0.0.1:4173/en/`.
+4. Vérifier en local, après `npm run build` : servir `dist/` avec un serveur qui applique `_headers` (par exemple `npx wrangler@4 dev --local`, sans déploiement). Ouvrir `/fr/` et `/en/`. Ne pas lancer `wrangler deploy`, ni un appel à l’API Cloudflare, ni une preview.
 
 ## Déployer (quand vous l’aurez décidé)
 
@@ -124,7 +134,7 @@ Pour tout couper : remettre `preview_urls` à `false` et Disable dans le tableau
 
 La plateforme retenue est Workers. La procédure Pages reste ici si le choix était rouvert :
 
-1. Créer un projet Pages dont le dossier publié est `site/public`. Pas de commande de build.
+1. Créer un projet Pages dont le dossier publié est `site/dist`, après `npm run build`. Pas de déploiement tant que le propriétaire ne l’a pas demandé.
 2. Ne pas ajouter de domaine personnalisé. L’adresse sera `https://<projet>.pages.dev`.
 3. **Workers & Pages** → le projet → **Settings** → **General** → désactiver l’accès public des déploiements de prévisualisation, ou les couvrir par Access. Les aperçus Pages (`<hash>.<projet>.pages.dev`) sont lisibles par quiconque a le lien tant qu’Access ne les couvre pas.
 4. Activer Access sur la production **et** sur les previews, même politique : Allow, email `<ARNAUD_EMAIL>` seulement, One-time PIN en méthode exigée.

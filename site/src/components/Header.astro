@@ -1,0 +1,47 @@
+---
+import { features, ui, type Lang } from "../data/features";
+
+interface Props {
+  lang: Lang;
+  path: string;
+  altPath: string;
+}
+
+const { lang, path, altPath } = Astro.props;
+const t = ui[lang];
+const home = `/${lang}/`;
+---
+
+<header class="bar">
+  <div class="bar-row">
+    <a class="mark" href={home}>
+      <img src="/media/icon.png" width="28" height="28" alt="" />
+      OxiNote
+    </a>
+    <nav class="links" aria-label={t.navLabel}>
+      <a href={home} aria-current={path === home ? "page" : undefined}>{t.home}</a>
+      {features.map((feature) => {
+        const href = `/${lang}/${feature.slug[lang]}/`;
+        return <a href={href} aria-current={path === href ? "page" : undefined}>{feature.nav[lang]}</a>;
+      })}
+    </nav>
+    <details class="menu">
+      <summary>{t.menu}</summary>
+      <nav aria-label={t.navLabel}>
+        <a href={home}>{t.home}</a>
+        {features.map((feature) => (
+          <a href={`/${lang}/${feature.slug[lang]}/`}>{feature.nav[lang]}</a>
+        ))}
+        <a href="https://github.com/LeVibeux/OxiNote">{t.github}</a>
+      </nav>
+    </details>
+    <div class="tools">
+      <a class="gh" href="https://github.com/LeVibeux/OxiNote">{t.github}</a>
+      <nav aria-label={t.langLabel}>
+        <a href={lang === "fr" ? path : altPath} hreflang="fr" lang="fr" aria-current={lang === "fr" ? "page" : undefined}>FR</a>
+        <span aria-hidden="true">/</span>
+        <a href={lang === "en" ? path : altPath} hreflang="en" lang="en" aria-current={lang === "en" ? "page" : undefined}>EN</a>
+      </nav>
+    </div>
+  </div>
+</header>

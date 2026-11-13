@@ -1,0 +1,19 @@
+---
+import { downloads, ui, RELEASES, type Lang } from "../data/features";
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = ui[lang];
+---
+
+<p class="downloads">
+  {downloads.map((item) => (
+    <a class="dl" href={RELEASES}>
+      <strong>{item[lang]}</strong>
+      <span>{item.note[lang]}</span>
+    </a>
+  ))}
+</p>
+<p class="fine">{t.releasesNote}</p>

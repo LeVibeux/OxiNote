@@ -1,0 +1,28 @@
+---
+import { ui, pathFor, type Lang } from "../data/features";
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = ui[lang];
+---
+
+<footer class="site-foot">
+  <div class="foot-inner">
+    <p><strong>LeVibeux</strong>, {t.publisher}. Québec.</p>
+    <nav class="foot-nav" aria-label={t.footerLabel}>
+      <a href={pathFor(lang, "privacy")}>{t.privacy}</a>
+      <a href="https://github.com/LeVibeux/OxiNote">{t.contribute}</a>
+      <a href={pathFor(lang, "install")}>{t.download}</a>
+      <a href="/fonts/Fraunces-OFL.txt">Fraunces</a>
+      <a href="/fonts/IBMPlexMono-OFL.txt">IBM Plex Mono</a>
+    </nav>
+    <p class="foot-note">
+      {lang === "fr"
+        ? "Polices Fraunces et IBM Plex Mono, SIL Open Font License. Pas de témoin. Pas de mesure d’audience."
+        : "Fraunces and IBM Plex Mono, SIL Open Font License. No cookies. No audience measurement."}
+    </p>
+  </div>
+</footer>

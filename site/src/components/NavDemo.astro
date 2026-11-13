@@ -1,0 +1,20 @@
+---
+interface Props {
+  label: string;
+}
+const { label } = Astro.props;
+---
+
+<div class="nav-demo">
+  <video
+    autoplay
+    muted
+    loop
+    playsinline
+    poster="/media/nav-poster.png"
+    src="/media/nav.mp4"
+  >
+    {label}
+  </video>
+  <img class="nav-still" src="/media/nav-poster.png" alt={label} />
+</div>
