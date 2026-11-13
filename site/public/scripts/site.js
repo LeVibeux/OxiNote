@@ -1,7 +1,15 @@
 /* Local only. No network, no storage, no cookies.
    Types the CLI transcript once. The full text stays in the page either way. */
 (function () {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) {
+    var clips = document.querySelectorAll("video");
+    for (var v = 0; v < clips.length; v++) {
+      clips[v].pause();
+      clips[v].removeAttribute("autoplay");
+    }
+    return;
+  }
   var nodes = document.querySelectorAll("[data-term]");
   for (var n = 0; n < nodes.length; n++) {
     typeOnce(nodes[n]);

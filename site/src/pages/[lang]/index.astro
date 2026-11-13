@@ -1,6 +1,7 @@
 ---
 import Base from "../../layouts/Base.astro";
 import Downloads from "../../components/Downloads.astro";
+import NavDemo from "../../components/NavDemo.astro";
 import {
   features,
   ui,
@@ -38,7 +39,7 @@ const h1 =
     ? ["Tes notes.", "Tes fichiers.", "Ton rythme."]
     : ["Your notes.", "Your files.", "Your pace."];
 
-const order = ["vault", "modes", "graph", "git", "pdf", "cli", "install"] as const;
+const order = ["nav", "vault", "modes", "graph", "git", "pdf", "cli", "install"] as const;
 const blocks = order.map((id) => features.find((feature) => feature.id === id)!);
 const later = features.find((feature) => feature.id === "later")!;
 const band = laterBand[lang];
@@ -75,6 +76,15 @@ const modeNames =
           <p class="home-more"><a href={href}>{homeMore[lang]}</a></p>
         </div>
       );
+
+      if (feature.id === "nav") {
+        return (
+          <section class="home-block reveal">
+            <NavDemo label={feature.lede[lang]} />
+            {copy}
+          </section>
+        );
+      }
 
       if (feature.id === "vault") {
         const shot = feature.shots[0];

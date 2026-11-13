@@ -84,7 +84,7 @@ export interface Feature {
   body: Record<Lang, string[]>;
   tech: Record<Lang, string[]>;
   shots: Shot[];
-  demo?: "modes" | "pan" | "term" | "downloads";
+  demo?: "modes" | "pan" | "term" | "downloads" | "nav";
 }
 
 const liveAlt = {
@@ -93,6 +93,55 @@ const liveAlt = {
 };
 
 export const features: Feature[] = [
+  {
+    id: "nav",
+    slug: { fr: "navigation", en: "navigation" },
+    nav: { fr: "Navigation", en: "Navigation" },
+    blurb: {
+      fr: "Un tiret par titre, sur le bord de la note.",
+      en: "One tick per heading, on the edge of the note.",
+    },
+    title: {
+      fr: "Sache toujours où tu en es.",
+      en: "Always know where you are.",
+    },
+    description: {
+      fr: "Sur le bord de chaque note, un tiret par titre. Celui que tu lis s’allume.",
+      en: "One tick per heading on the edge of every note. The one you’re reading lights up.",
+    },
+    lede: {
+      fr: "Sur le bord de chaque note, un tiret par titre. Celui que tu lis s’allume. Survole pour voir le plan, clique pour y sauter.",
+      en: "One tick per heading on the edge of every note. The one you’re reading lights up. Hover to see the outline, click to jump.",
+    },
+    body: {
+      fr: [
+        "Les tirets sont empilés sur le bord droit. Un titre de niveau 1 fait 20 px, un titre de niveau 2 fait 14 px, un titre de niveau 3 ou plus fait 8 px.",
+        "Celui du titre visible prend la couleur d’accent. C’est le dernier titre dont le haut est passé au-dessus du bord visible, avec une petite marge. Il suit le défilement, pas le curseur.",
+      ],
+      en: [
+        "The ticks stack on the right edge. A level-1 heading is 20 px, a level-2 heading is 14 px, a level-3 heading or deeper is 8 px.",
+        "The tick of the heading in view takes the accent colour. That is the last heading whose top has passed above the visible edge, with a small margin. It follows scrolling, not the caret.",
+      ],
+    },
+    tech: {
+      fr: [
+        "Loupe, le réglage par défaut : les tirets près du pointeur grandissent, à la façon du Dock, et leur titre s’écrit dans une pastille.",
+        "Plan flottant : une carte liste le plan, indenté. Le titre en cours est en gras et dans la couleur d’accent. Un titre de niveau 1 l’est aussi.",
+        "Un clic sur un tiret, ou sur une ligne de la carte, saute à ce titre. Dans l’éditeur, le curseur se place sur cette ligne.",
+        "Présent en Live Preview, en Source et en Lecture. Absent si le réglage est Off, si la note n’a pas de titre, si le panneau fait moins de 80 px, sur un graphe, un PDF, ou un fichier qui n’est pas du Markdown.",
+        "Réglage, page Editor : Heading navigator, valeurs Off, Floating outline, Magnifier. La palette a la commande « Editor: Cycle heading navigator (off / floating outline / magnifier) », qui les parcourt dans cet ordre.",
+      ],
+      en: [
+        "Magnifier, the default: ticks near the pointer grow, in the manner of the Dock, and their title is written in a pill.",
+        "Floating outline: a card lists the outline, indented. The current heading is bold and in the accent colour. A level-1 heading is bold as well.",
+        "A click on a tick, or on a row of the card, jumps to that heading. In the editor, the caret moves to that line.",
+        "Present in Live Preview, Source and Reading. Absent when the setting is Off, when the note has no heading, when the panel is under 80 px, on a graph, a PDF, or a file that is not Markdown.",
+        "Setting, Editor page: Heading navigator, values Off, Floating outline, Magnifier. The palette has the command “Editor: Cycle heading navigator (off / floating outline / magnifier)”, which walks them in that order.",
+      ],
+    },
+    demo: "nav",
+    shots: [],
+  },
   {
     id: "vault",
     slug: { fr: "coffre", en: "vault" },
@@ -553,6 +602,16 @@ export const features: Feature[] = [
 
 /** Two short lines and a link label for the home blocks. */
 export const homeLines: Record<string, Record<Lang, [string, string]>> = {
+  nav: {
+    fr: [
+      "Sur le bord de chaque note, un tiret par titre.",
+      "Celui que tu lis s’allume. Survole pour voir le plan, clique pour y sauter.",
+    ],
+    en: [
+      "One tick per heading on the edge of every note.",
+      "The one you’re reading lights up. Hover to see the outline, click to jump.",
+    ],
+  },
   vault: {
     fr: ["On désigne le dossier.", "Les notes sont déjà des fichiers Markdown."],
     en: ["Point it at the folder.", "The notes are already Markdown files."],

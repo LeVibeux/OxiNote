@@ -35,7 +35,7 @@ import Base from "../../layouts/Base.astro";
 
     <section id="donnees">
       <h2>Renseignements, fins, durée</h2>
-      <p>Les fichiers ne contiennent aucun formulaire et ne demandent pas de compte OxiNote. Un script, servi par le même hôte que la page, anime la démonstration de la commande <code>oxinote</code>. Il n’ouvre aucune connexion : la politique de sécurité du contenu l’interdit (<code>connect-src 'none'</code>). Il ne dépose pas de témoin et n’écrit rien dans le navigateur. Deux catégories de renseignements peuvent apparaître une fois la page hébergée.</p>
+      <p>Les fichiers ne contiennent aucun formulaire et ne demandent pas de compte OxiNote. Un script, servi par le même hôte que la page, anime la démonstration de la commande <code>oxinote</code>. Une vidéo muette de l’application est aussi servie par ce même hôte (<code>media-src 'self'</code>). Ni le script ni la vidéo n’ouvrent de connexion : la politique de sécurité du contenu l’interdit (<code>connect-src 'none'</code>). Le script ne dépose pas de témoin et n’écrit rien dans le navigateur. Deux catégories de renseignements peuvent apparaître une fois la page hébergée.</p>
       <table>
         <thead>
           <tr><th>Renseignement</th><th>Moyen</th><th>Fin</th><th>Durée</th></tr>
@@ -89,7 +89,7 @@ import Base from "../../layouts/Base.astro";
 
     <section id="maj">
       <h2>Version de ce texte</h2>
-      <p>13 novembre 2026. Cette révision constate que la page charge un script du même hôte pour animer une démonstration, sans témoin déposé par la page et sans mesure d’audience. Une modification doit être diffusée de façon à joindre les personnes concernées (article 8.2). Le moyen prévu est le même profil GitHub.</p>
+      <p>13 novembre 2026. Cette révision constate que la page charge un script du même hôte et une vidéo muette du même hôte, sans témoin déposé par la page et sans mesure d’audience. Une modification doit être diffusée de façon à joindre les personnes concernées (article 8.2). Le moyen prévu est le même profil GitHub.</p>
     </section>
   </article>
 </Base>

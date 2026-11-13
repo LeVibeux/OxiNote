@@ -35,7 +35,7 @@ import Base from "../../layouts/Base.astro";
 
     <section id="data">
       <h2>Information, purposes, retention</h2>
-      <p>The files contain no form and do not ask for an OxiNote account. A script, served by the same host as the page, animates the demonstration of the <code>oxinote</code> command. It opens no connection: the content security policy forbids it (<code>connect-src 'none'</code>). It sets no cookie and writes nothing in the browser. Two categories of information can appear once the page is hosted.</p>
+      <p>The files contain no form and do not ask for an OxiNote account. A script, served by the same host as the page, animates the demonstration of the <code>oxinote</code> command. A muted video of the application is also served by that same host (<code>media-src 'self'</code>). Neither the script nor the video opens a connection: the content security policy forbids it (<code>connect-src 'none'</code>). The script sets no cookie and writes nothing in the browser. Two categories of information can appear once the page is hosted.</p>
       <table>
         <thead>
           <tr><th>Information</th><th>Means</th><th>Purpose</th><th>Retention</th></tr>
@@ -89,7 +89,7 @@ import Base from "../../layouts/Base.astro";
 
     <section id="version">
       <h2>Version of this text</h2>
-      <p>13 November 2026. This revision records that the page now loads a same-host script to animate a demonstration, still with no cookie set by the page and no audience measurement. A change has to be sent in a way that reaches the persons concerned (section 8.2). The intended means is the same GitHub profile.</p>
+      <p>13 November 2026. This revision records that the page now loads a same-host script and a muted same-host video, still with no cookie set by the page and no audience measurement. A change has to be sent in a way that reaches the persons concerned (section 8.2). The intended means is the same GitHub profile.</p>
     </section>
   </article>
 </Base>

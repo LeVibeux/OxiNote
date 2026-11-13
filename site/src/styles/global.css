@@ -289,7 +289,15 @@ h1 {
   width: min(76rem, calc(100% - 2rem));
   margin: 4.2rem auto;
 }
-.home-full { margin: -4.2rem 0 1.4rem; }
+.home-full { margin: 0 0 1.4rem; }
+.nav-demo video, .nav-still {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #141210;
+  outline: 1px solid rgba(156, 59, 34, 0.45);
+}
+.nav-still { display: none; }
 .home-copy h2 {
   font-size: clamp(2rem, 4vw, 3.1rem);
   font-weight: 600;
@@ -631,6 +639,8 @@ code {
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+  .nav-demo video { display: none; }
+  .nav-still { display: block; }
   ::view-transition-group(*),
   ::view-transition-old(*),
   ::view-transition-new(*) { animation: none; }
